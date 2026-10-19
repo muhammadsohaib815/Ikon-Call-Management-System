@@ -27,10 +27,15 @@ const elements = {
   fmcgMobileLiveCallInput: $("#fmcg-mobile-live-call-file-input"),
   fmcgMobileLiveCallDropZone: $("#fmcg-mobile-live-call-drop-zone"),
   fmcgMobileLiveCallStatus: $("#fmcg-mobile-live-call-status"),
+  authControls: $("#auth-controls"),
+  authUserLabel: $("#auth-user-label"),
+  authLogoutButton: $("#auth-logout-btn"),
+  authUsersTab: $("#auth-users-tab"),
 };
 
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 const FROZEN_REPORT_COLUMN_KEYS = new Set(["desg", "position_code", "sas_id", "ff_name"]);
+const authState = { user: null };
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
@@ -45,6 +50,9 @@ function attendanceStatus(message, error = false) {
 
 async function api(url, options = {}) {
   const response = await fetch(url, options);
+  if (response.status === 401 && !window.location.pathname.startsWith("/login")) {
+    window.location.replace("/login");
+  }
   if (!response.ok) {
     let message = "The request could not be completed.";
     try {
@@ -57,6 +65,121 @@ async function api(url, options = {}) {
   }
   return response;
 }
+
+function hasPermission(permission) {
+  return authState.user?.role === "admin" || Boolean(authState.user?.permissions?.[permission]);
+}
+
+document.addEventListener("click", (event) => {
+  const toggle = event.target.closest("[data-toggle-password]");
+  if (!toggle) return;
+  const input = toggle.parentElement?.querySelector("input");
+  if (!input) return;
+  const visible = input.type === "text";
+  input.type = visible ? "password" : "text";
+  toggle.textContent = visible ? "Show" : "Hide";
+  toggle.setAttribute("aria-pressed", String(!visible));
+});
+
+function applyAuthVisibility() {
+  const uploadButton = $("#dash-toggle-uploads-btn");
+  if (uploadButton) uploadButton.classList.toggle("hidden", !hasPermission("add"));
+  if (typeof staffElements !== "undefined") {
+    staffElements.addBtn?.classList.toggle("hidden", !hasPermission("add"));
+  }
+  document.body.classList.toggle("auth-no-edit", !hasPermission("edit"));
+  document.body.classList.toggle("auth-no-delete", !hasPermission("delete"));
+}
+
+async function loadAuthUser() {
+  try {
+    const response = await fetch("/api/auth/me");
+    const result = await response.json();
+    if (!result.authenticated) {
+      window.location.replace("/login");
+      return false;
+    }
+    authState.user = result.user;
+    elements.authControls?.classList.remove("hidden");
+    if (elements.authUserLabel) {
+      const permissionNames = Object.entries(result.user.permissions || {})
+        .filter(([, allowed]) => allowed)
+        .map(([name]) => name)
+        .join(", ");
+      elements.authUserLabel.textContent = `${result.user.username} · ${result.user.role}${permissionNames ? ` · ${permissionNames}` : ""}`;
+    }
+    if (elements.authUserLabel) {
+      const initial = String(result.user.username || "?").charAt(0).toUpperCase();
+      elements.authUserLabel.innerHTML = `
+        <span class="auth-user-avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+        <span class="auth-user-details">
+          <small class="auth-user-kicker">CONNECTED USER</small>
+          <strong class="auth-user-name">${escapeHtml(result.user.username)}</strong>
+          <small class="auth-user-meta">${escapeHtml(result.user.role)}</small>
+        </span>`;
+      const displayPermissionNames = Object.entries(result.user.permissions || {})
+        .filter(([, allowed]) => allowed)
+        .map(([name]) => name.charAt(0).toUpperCase() + name.slice(1))
+        .join(" / ");
+      const userMeta = elements.authUserLabel.querySelector(".auth-user-meta");
+      if (userMeta) {
+        userMeta.textContent = String(result.user.role || "user").toUpperCase();
+        userMeta.title = displayPermissionNames ? `Permissions: ${displayPermissionNames}` : "Read access";
+      }
+    }
+    elements.authUsersTab?.classList.toggle("hidden", result.user.role !== "admin");
+    applyAuthVisibility();
+    if (result.user.role === "admin" && typeof loadAuthUsers === "function") loadAuthUsers();
+    return true;
+  } catch (error) {
+    window.location.replace("/login");
+    return false;
+  }
+}
+
+elements.authLogoutButton?.addEventListener("click", async () => {
+  await fetch("/api/auth/logout", { method: "POST" });
+  window.location.replace("/login");
+});
+
+function applySidebarState(collapsed) {
+  document.body.classList.toggle("sidebar-collapsed", collapsed);
+}
+
+applySidebarState(false);
+
+let sidebarHoverCount = 0;
+let sidebarAutoCollapseTimer = null;
+const sidebarHoverSurfaces = document.querySelectorAll(".topbar, .primary-tabs");
+
+function sidebarIsDesktop() {
+  return window.matchMedia("(min-width: 1181px)").matches;
+}
+
+function clearSidebarAutoCollapse() {
+  if (sidebarAutoCollapseTimer) {
+    window.clearTimeout(sidebarAutoCollapseTimer);
+    sidebarAutoCollapseTimer = null;
+  }
+}
+
+sidebarHoverSurfaces.forEach((surface) => {
+  surface.addEventListener("pointerenter", () => {
+    if (!sidebarIsDesktop()) return;
+    sidebarHoverCount += 1;
+    clearSidebarAutoCollapse();
+    if (document.body.classList.contains("sidebar-collapsed")) applySidebarState(false);
+  });
+  surface.addEventListener("pointerleave", () => {
+    if (!sidebarIsDesktop()) return;
+    sidebarHoverCount = Math.max(0, sidebarHoverCount - 1);
+    clearSidebarAutoCollapse();
+    sidebarAutoCollapseTimer = window.setTimeout(() => {
+      if (sidebarHoverCount === 0 && sidebarIsDesktop()) applySidebarState(true);
+      sidebarAutoCollapseTimer = null;
+    }, 750);
+  });
+});
 
 function renderAttendance() {
   const { columns, rows } = state.attendance;
@@ -273,6 +396,16 @@ function getDaysInMonthFromIso(isoDate) {
   return new Date(parts[0], parts[1], 0).getDate();
 }
 
+function getWorkdaysPassedFromIso(isoDate) {
+  const parts = String(isoDate || "").split("-").map(Number);
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return 0;
+  let workdays = 0;
+  for (let day = 1; day <= parts[2]; day += 1) {
+    if (new Date(parts[0], parts[1] - 1, day).getDay() !== 0) workdays += 1;
+  }
+  return workdays;
+}
+
 function populateSelectOptions(selectEl, defaultLabel, items, currentValue) {
   selectEl.innerHTML = `<option value="">${escapeHtml(defaultLabel)}</option>${items
     .map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`)
@@ -482,6 +615,7 @@ function createTeamIkonMtdSummary({
     colHeaderRow: $(`#${prefix}-col-header-row`),
     rowBadge: $(`#${prefix}-row-badge`),
     dateFilter: $(`#${prefix}-date-filter`),
+    refreshButton: $(`#${prefix}-refresh-summary`),
     exportButton: $(`#${prefix}-export-excel`),
     searchInput: $(`#${prefix}-search-input`),
     desgFilter: $(`#${prefix}-desg-filter`),
@@ -891,10 +1025,16 @@ function createTeamIkonMtdSummary({
       const values = rows.map(getter).map(Number).filter(Number.isFinite);
       return values.length ? values.reduce((total, value) => total + value, 0) : null;
     };
-    const average = (getter) => {
-      const values = rows.map(getter).map(Number).filter(Number.isFinite);
-      return values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
-    };
+    const managementCalls = sum((row) => row.calls_total);
+    const managementRepsTotal = sum((row) => managementReps(row));
+    const workdaysPassed = getWorkdaysPassedFromIso(reportDate);
+    const managementAvgCall = (
+      managementCalls !== null
+      && managementRepsTotal
+      && workdaysPassed
+    )
+      ? managementCalls / managementRepsTotal / workdaysPassed
+      : null;
     const summaryValues = [
       sum((row) => managementReps(row)),
       sum((row) => managementVacant(row)),
@@ -908,7 +1048,7 @@ function createTeamIkonMtdSummary({
       sum((row) => row.day_call_used),
       sum((row) => row.calls_total),
       sum((row) => row.mtd_calls_used),
-      average((row) => row.avg_call),
+      managementAvgCall,
     ];
     dom.managementPrintFooter.innerHTML = `<tr>
       <td colspan="4" class="management-total-label">TOTAL SUMMARY</td>
@@ -1084,6 +1224,21 @@ function createTeamIkonMtdSummary({
     loadSummary();
   });
 
+  dom.refreshButton?.addEventListener("click", async () => {
+    if (teamState.loading) return;
+    teamState.liveCallSource.status = "unknown";
+    dom.refreshButton.disabled = true;
+    dom.refreshButton.classList.add("is-loading");
+    dom.refreshButton.setAttribute("aria-busy", "true");
+    try {
+      await loadSummary();
+    } finally {
+      dom.refreshButton.disabled = false;
+      dom.refreshButton.classList.remove("is-loading");
+      dom.refreshButton.removeAttribute("aria-busy");
+    }
+  });
+
   dom.resetButton.addEventListener("click", () => {
     resetTeamFilters(true);
   });
@@ -1250,6 +1405,126 @@ const pharmaElements = pharmaSummary.elements;
 const loadPharmaSummary = pharmaSummary.load;
 
 pharmaElements.managementPrintFullscreenBtn?.addEventListener("click", () => setManagementPrintFullscreen(pharmaSummary));
+
+// ---------------------------------------------------------------------------
+// Database-backed application user management (admin only)
+// ---------------------------------------------------------------------------
+
+const authUserElements = {
+  form: $("#auth-user-create-form"),
+  username: $("#auth-new-username"),
+  password: $("#auth-new-password"),
+  role: $("#auth-new-role"),
+  read: $("#auth-new-read"),
+  add: $("#auth-new-add"),
+  edit: $("#auth-new-edit"),
+  delete: $("#auth-new-delete"),
+  notice: $("#auth-user-notice"),
+  refresh: $("#auth-users-refresh"),
+  tbody: $("#auth-users-tbody"),
+};
+
+function showAuthUserNotice(message, isError = false) {
+  if (!authUserElements.notice) return;
+  authUserElements.notice.textContent = message;
+  authUserElements.notice.classList.toggle("error", isError);
+  authUserElements.notice.classList.remove("hidden");
+}
+
+function renderAuthUsers(rows = []) {
+  if (!authUserElements.tbody) return;
+  if (!rows.length) {
+    authUserElements.tbody.innerHTML = '<tr><td colspan="5" class="fmcg-state-cell">No users found.</td></tr>';
+    return;
+  }
+  const permissions = ["read", "add", "edit", "delete"];
+  authUserElements.tbody.innerHTML = rows.map((user) => {
+    const badges = permissions.map((permission) => `<span class="auth-permission-badge${user.permissions?.[permission] ? " active" : ""}">${permission}</span>`).join("");
+    const controls = permissions.map((permission) => `<label class="auth-checkbox"><input type="checkbox" data-permission="${permission}"${user.permissions?.[permission] ? " checked" : ""} />${permission}</label>`).join("");
+    const isCurrentUser = Number(user.id) === Number(authState.user?.id);
+    return `<tr data-user-id="${escapeHtml(user.id)}">
+      <td><strong>${escapeHtml(user.username)}</strong></td>
+      <td><select data-user-role><option value="user"${user.role === "user" ? " selected" : ""}>User</option><option value="admin"${user.role === "admin" ? " selected" : ""}>Admin</option></select></td>
+      <td><div class="auth-user-permissions">${badges}</div><div class="auth-user-edit-permissions">${controls}</div></td>
+      <td>${user.isActive ? "Active" : "Inactive"}</td>
+      <td><div class="auth-user-actions"><span class="auth-password-field"><input type="password" data-user-password placeholder="New password" autocomplete="new-password" /><button type="button" class="password-toggle" data-toggle-password>Show</button></span><button type="button" class="button secondary auth-user-save">Save</button><button type="button" class="button danger auth-user-deactivate"${isCurrentUser || !user.isActive ? " disabled" : ""}>Deactivate</button></div></td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadAuthUsers() {
+  if (!authUserElements.tbody || authState.user?.role !== "admin") return;
+  try {
+    const response = await api("/api/auth/users");
+    const result = await response.json();
+    renderAuthUsers(result.rows || []);
+  } catch (error) {
+    authUserElements.tbody.innerHTML = `<tr><td colspan="5" class="fmcg-state-cell">${escapeHtml(error.message || "Unable to load users.")}</td></tr>`;
+  }
+}
+
+authUserElements.form?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await api("/api/auth/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: authUserElements.username.value,
+        password: authUserElements.password.value,
+        role: authUserElements.role.value,
+        can_read: authUserElements.read.checked,
+        can_add: authUserElements.add.checked,
+        can_edit: authUserElements.edit.checked,
+        can_delete: authUserElements.delete.checked,
+      }),
+    });
+    authUserElements.form.reset();
+    authUserElements.read.checked = true;
+    showAuthUserNotice("User created successfully.");
+    await loadAuthUsers();
+  } catch (error) {
+    showAuthUserNotice(error.message || "Unable to create user.", true);
+  }
+});
+
+authUserElements.refresh?.addEventListener("click", loadAuthUsers);
+authUserElements.tbody?.addEventListener("click", async (event) => {
+  const row = event.target.closest("tr[data-user-id]");
+  if (!row) return;
+  const userId = row.dataset.userId;
+  if (event.target.closest(".auth-user-save")) {
+    const permissions = {};
+    row.querySelectorAll("input[data-permission]").forEach((input) => {
+      permissions[`can_${input.dataset.permission}`] = input.checked;
+    });
+    const passwordInput = row.querySelector("[data-user-password]");
+    if (passwordInput.value.trim()) permissions.password = passwordInput.value;
+    permissions.role = row.querySelector("[data-user-role]").value;
+    try {
+      await api(`/api/auth/users/${encodeURIComponent(userId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(permissions),
+      });
+      passwordInput.value = "";
+      showAuthUserNotice("User permissions updated.");
+      await loadAuthUsers();
+    } catch (error) {
+      showAuthUserNotice(error.message || "Unable to update user.", true);
+    }
+  }
+  if (event.target.closest(".auth-user-deactivate")) {
+    if (!window.confirm("Deactivate this user account?")) return;
+    try {
+      await api(`/api/auth/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+      showAuthUserNotice("User deactivated.");
+      await loadAuthUsers();
+    } catch (error) {
+      showAuthUserNotice(error.message || "Unable to deactivate user.", true);
+    }
+  }
+});
 
 // ---------------------------------------------------------------------------
 // FF Master Staff – PostgreSQL Database Management (CRUD)
@@ -1973,6 +2248,7 @@ $$(".primary-tab").forEach((tab) => tab.addEventListener("click", () => {
   $("#fmcg-ikon-mtd-page").classList.toggle("hidden", tab.dataset.page !== "fmcg-ikon-mtd");
   $("#pharma-ikon-mtd-page").classList.toggle("hidden", tab.dataset.page !== "pharma-ikon-mtd");
   $("#editor-page").classList.toggle("hidden", tab.dataset.page !== "editor");
+  $("#users-page")?.classList.toggle("hidden", tab.dataset.page !== "users");
   if (tab.dataset.page === "fmcg-ikon-mtd" && !fmcgState.loaded && !fmcgState.loading) {
     loadFmcgSummary();
   }
@@ -1982,14 +2258,18 @@ $$(".primary-tab").forEach((tab) => tab.addEventListener("click", () => {
   if (tab.dataset.page === "editor" && !staffCrudState.schemaLoaded && !staffCrudState.loading) {
     loadStaffRecords();
   }
+  if (tab.dataset.page === "users") {
+    loadAuthUsers();
+  }
 }));
 
+loadAuthUser();
 loadFmcgSummary();
 loadPharmaSummary();
 loadStaffRecords();
 
 // ---------------------------------------------------------------------------
-// IKON Call Performance Dashboard (First Tab)
+// IKON Call Performance System (First Tab)
 // Analytics + KPI Cards + Line/Bar/Pie Charts + Interactive DB Tables
 // ---------------------------------------------------------------------------
 
@@ -1997,7 +2277,7 @@ const dashState = {
   loading: false,
   loaded: false,
   filtersPopulated: false,
-  period: "monthly", // "daily" | "weekly" | "monthly"
+  period: "mtd", // "mtd" | "ytd"
   trendMode: "daily", // "daily" | "weekly" | "monthly"
   lineMetric: "calls_vs_att",
   empBarMetric: "period_comparison",
@@ -2274,25 +2554,24 @@ function renderDashboardKpis() {
   if (!dashState.data) return;
   const { kpis } = dashState.data;
   const period = dashState.period;
-  const pData = kpis[period] || kpis.monthly;
-  const dData = kpis.daily;
-  const wData = kpis.weekly;
-  const mData = kpis.monthly;
-  const periodTitle = period === "daily" ? "Daily" : period === "weekly" ? "Weekly (7-Day)" : "Monthly (MTD)";
+  const pData = kpis[period] || kpis.mtd || kpis.monthly;
+  const mData = kpis.mtd || kpis.monthly;
+  const yData = kpis.ytd || mData;
+  const periodTitle = period === "ytd" ? "YTD" : "MTD";
 
   const focusedEmp = getFocusedEmployee();
   if (focusedEmp) {
-    const empCalls = period === "daily" ? focusedEmp.dailyCalls : period === "weekly" ? focusedEmp.weeklyCalls : focusedEmp.monthlyCalls;
-    const empAtt = period === "daily" ? focusedEmp.dailyAtt : period === "weekly" ? focusedEmp.weeklyAttDays : focusedEmp.monthlyAttDays;
-    const empAvg = period === "daily" ? focusedEmp.dailyCalls : period === "weekly" ? focusedEmp.weeklyAvgCalls : focusedEmp.monthlyAvgCalls;
-    const empLcd = period === "daily" ? focusedEmp.dailyLcdCalls : period === "weekly" ? focusedEmp.weeklyLcdCalls : focusedEmp.monthlyLcdCalls;
-    const empProd = period === "daily" ? focusedEmp.dailyProducts : period === "weekly" ? focusedEmp.weeklyProducts : focusedEmp.monthlyProducts;
-    const empExc = (period === "daily" ? focusedEmp.dailyNoCalls : period === "weekly" ? focusedEmp.weeklyNoCallDays : focusedEmp.monthlyNoCallDays)
-      + (period === "daily" ? focusedEmp.dailyLeave : period === "weekly" ? focusedEmp.weeklyLeaveDays : focusedEmp.monthlyLeaveDays);
+    const empCalls = period === "ytd" ? focusedEmp.ytdCalls : focusedEmp.monthlyCalls;
+    const empAtt = period === "ytd" ? focusedEmp.ytdAttDays : focusedEmp.monthlyAttDays;
+    const empAvg = period === "ytd" ? focusedEmp.ytdAvgCalls : focusedEmp.monthlyAvgCalls;
+    const empLcd = period === "ytd" ? focusedEmp.ytdLcdCalls : focusedEmp.monthlyLcdCalls;
+    const empProd = period === "ytd" ? focusedEmp.ytdProducts : focusedEmp.monthlyProducts;
+    const empExc = (period === "ytd" ? focusedEmp.ytdNoCallDays : focusedEmp.monthlyNoCallDays)
+      + (period === "ytd" ? focusedEmp.ytdLeaveDays : focusedEmp.monthlyLeaveDays);
 
     dashDom.kpiCallsTitle.textContent = `${periodTitle} Calls (${focusedEmp.ff_id})`;
     dashDom.kpiCallsValue.textContent = empCalls.toLocaleString();
-    dashDom.kpiCallsSub.innerHTML = `<span>Daily: <strong>${focusedEmp.dailyCalls.toLocaleString()}</strong></span><span>Weekly: <strong>${focusedEmp.weeklyCalls.toLocaleString()}</strong></span><span>Monthly: <strong>${focusedEmp.monthlyCalls.toLocaleString()}</strong></span>`;
+    dashDom.kpiCallsSub.innerHTML = `<span>MTD: <strong>${focusedEmp.monthlyCalls.toLocaleString()}</strong></span><span>YTD: <strong>${focusedEmp.ytdCalls.toLocaleString()}</strong></span>`;
 
     dashDom.kpiEmpTitle.textContent = "Focused Employee";
     dashDom.kpiEmpValue.textContent = focusedEmp.ff_name;
@@ -2300,59 +2579,59 @@ function renderDashboardKpis() {
 
     dashDom.kpiAvgTitle.textContent = `${periodTitle} Avg Calls / Day`;
     dashDom.kpiAvgValue.textContent = Number(empAvg).toFixed(1);
-    dashDom.kpiAvgSub.innerHTML = `<span>Daily: <strong>${focusedEmp.dailyCalls}</strong></span><span>Wk Avg: <strong>${focusedEmp.weeklyAvgCalls}</strong></span><span>Mth Avg: <strong>${focusedEmp.monthlyAvgCalls}</strong></span>`;
+    dashDom.kpiAvgSub.innerHTML = `<span>MTD Avg: <strong>${focusedEmp.monthlyAvgCalls}</strong></span><span>YTD Avg: <strong>${focusedEmp.ytdAvgCalls}</strong></span>`;
 
     dashDom.kpiAttTitle.textContent = `${periodTitle} Attendance`;
     dashDom.kpiAttValue.textContent = `${empAtt.toLocaleString()} day(s)`;
-    dashDom.kpiAttSub.innerHTML = `<span>Daily: <strong>${focusedEmp.dailyAtt}</strong></span><span>Weekly: <strong>${focusedEmp.weeklyAttDays}d</strong></span><span>Monthly: <strong>${focusedEmp.monthlyAttDays}d</strong></span>`;
+    dashDom.kpiAttSub.innerHTML = `<span>MTD: <strong>${focusedEmp.monthlyAttDays}d</strong></span><span>YTD: <strong>${focusedEmp.ytdAttDays}d</strong></span>`;
 
     dashDom.kpiLcdTitle.textContent = `${periodTitle} Provider Calls`;
     dashDom.kpiLcdValue.textContent = empLcd.toLocaleString();
-    dashDom.kpiLcdSub.innerHTML = `<span>Daily: <strong>${focusedEmp.dailyLcdCalls}</strong></span><span>Weekly: <strong>${focusedEmp.weeklyLcdCalls}</strong></span><span>Monthly: <strong>${focusedEmp.monthlyLcdCalls}</strong></span>`;
+    dashDom.kpiLcdSub.innerHTML = `<span>MTD: <strong>${focusedEmp.monthlyLcdCalls}</strong></span><span>YTD: <strong>${focusedEmp.ytdLcdCalls}</strong></span>`;
 
     dashDom.kpiProdTitle.textContent = `${periodTitle} Products`;
     dashDom.kpiProdValue.textContent = empProd.toLocaleString();
-    dashDom.kpiProdSub.innerHTML = `<span>Daily: <strong>${focusedEmp.dailyProducts}</strong></span><span>Weekly: <strong>${focusedEmp.weeklyProducts}</strong></span><span>Monthly: <strong>${focusedEmp.monthlyProducts}</strong></span>`;
+    dashDom.kpiProdSub.innerHTML = `<span>MTD: <strong>${focusedEmp.monthlyProducts}</strong></span><span>YTD: <strong>${focusedEmp.ytdProducts}</strong></span>`;
 
     dashDom.kpiExcTitle.textContent = "No Calls & Leave Days";
     dashDom.kpiExcValue.textContent = empExc.toLocaleString();
-    dashDom.kpiExcSub.innerHTML = `<span>No Call: <strong>${focusedEmp.monthlyNoCallDays}d</strong></span><span>Leave: <strong>${focusedEmp.monthlyLeaveDays}d</strong></span><span>Doctors: <strong>${focusedEmp.uniqueDoctors}</strong></span>`;
+    dashDom.kpiExcSub.innerHTML = `<span>MTD Issues: <strong>${focusedEmp.monthlyNoCallDays + focusedEmp.monthlyLeaveDays}</strong></span><span>YTD Issues: <strong>${focusedEmp.ytdNoCallDays + focusedEmp.ytdLeaveDays}</strong></span><span>Doctors: <strong>${focusedEmp.uniqueDoctors}</strong></span>`;
 
-    dashDom.kpiGeoValue.textContent = `${focusedEmp.inRangePct}%`;
+    dashDom.kpiGeoValue.textContent = `${period === "ytd" ? focusedEmp.ytdInRangePct : focusedEmp.inRangePct}%`;
     dashDom.kpiGeoSub.innerHTML = `<span>Manager: <strong>${escapeHtml(focusedEmp.manager)}</strong></span>`;
     return;
   }
 
   dashDom.kpiCallsTitle.textContent = `${periodTitle} Calls Done`;
   dashDom.kpiCallsValue.textContent = pData.callsDone.toLocaleString();
-  dashDom.kpiCallsSub.innerHTML = `<span>Daily: <strong>${dData.callsDone.toLocaleString()}</strong></span><span>Weekly: <strong>${wData.callsDone.toLocaleString()}</strong></span><span>Monthly: <strong>${mData.callsDone.toLocaleString()}</strong></span>`;
+  dashDom.kpiCallsSub.innerHTML = `<span>MTD: <strong>${mData.callsDone.toLocaleString()}</strong></span><span>YTD: <strong>${yData.callsDone.toLocaleString()}</strong></span>`;
 
   dashDom.kpiEmpTitle.textContent = `${periodTitle} Active Employees`;
   dashDom.kpiEmpValue.textContent = `${pData.activeEmployees.toLocaleString()} / ${kpis.totalEmployees.toLocaleString()}`;
-  dashDom.kpiEmpSub.innerHTML = `<span>Daily: <strong>${dData.activeEmployees}</strong></span><span>Weekly: <strong>${wData.activeEmployees}</strong></span><span>Monthly: <strong>${mData.activeEmployees}</strong></span>`;
+  dashDom.kpiEmpSub.innerHTML = `<span>MTD: <strong>${mData.activeEmployees}</strong></span><span>YTD: <strong>${yData.activeEmployees}</strong></span>`;
 
   dashDom.kpiAvgTitle.textContent = `${periodTitle} Avg Calls / Emp`;
   dashDom.kpiAvgValue.textContent = Number(pData.avgCallsPerEmp).toFixed(1);
-  dashDom.kpiAvgSub.innerHTML = `<span>Daily Avg: <strong>${dData.avgCallsPerEmp}</strong></span><span>Wk Avg: <strong>${wData.avgCallsPerEmp}</strong></span><span>Mth Avg: <strong>${mData.avgCallsPerEmp}</strong></span>`;
+  dashDom.kpiAvgSub.innerHTML = `<span>MTD Avg: <strong>${mData.avgCallsPerEmp}</strong></span><span>YTD Avg: <strong>${yData.avgCallsPerEmp}</strong></span>`;
 
   dashDom.kpiAttTitle.textContent = `${periodTitle} Attendance`;
   dashDom.kpiAttValue.textContent = pData.attendanceCount.toLocaleString();
-  dashDom.kpiAttSub.innerHTML = `<span>Daily: <strong>${dData.attendanceCount.toLocaleString()}</strong></span><span>Weekly: <strong>${wData.attendanceCount.toLocaleString()}</strong></span><span>Monthly: <strong>${mData.attendanceCount.toLocaleString()}</strong></span>`;
+  dashDom.kpiAttSub.innerHTML = `<span>MTD: <strong>${mData.attendanceCount.toLocaleString()}</strong></span><span>YTD: <strong>${yData.attendanceCount.toLocaleString()}</strong></span>`;
 
   dashDom.kpiLcdTitle.textContent = `${periodTitle} Provider Calls`;
   dashDom.kpiLcdValue.textContent = pData.lcdProviderCalls.toLocaleString();
-  dashDom.kpiLcdSub.innerHTML = `<span>Daily: <strong>${dData.lcdProviderCalls.toLocaleString()}</strong></span><span>Weekly: <strong>${wData.lcdProviderCalls.toLocaleString()}</strong></span><span>Monthly: <strong>${mData.lcdProviderCalls.toLocaleString()}</strong></span>`;
+  dashDom.kpiLcdSub.innerHTML = `<span>MTD: <strong>${mData.lcdProviderCalls.toLocaleString()}</strong></span><span>YTD: <strong>${yData.lcdProviderCalls.toLocaleString()}</strong></span>`;
 
   dashDom.kpiProdTitle.textContent = `${periodTitle} Products Detailed`;
   dashDom.kpiProdValue.textContent = pData.lcdProducts.toLocaleString();
-  dashDom.kpiProdSub.innerHTML = `<span>Daily: <strong>${dData.lcdProducts.toLocaleString()}</strong></span><span>Weekly: <strong>${wData.lcdProducts.toLocaleString()}</strong></span><span>Monthly: <strong>${mData.lcdProducts.toLocaleString()}</strong></span>`;
+  dashDom.kpiProdSub.innerHTML = `<span>MTD: <strong>${mData.lcdProducts.toLocaleString()}</strong></span><span>YTD: <strong>${yData.lcdProducts.toLocaleString()}</strong></span>`;
 
   const totalIssues = pData.noCallsCount + pData.leaveCount;
   dashDom.kpiExcTitle.textContent = `${periodTitle} No Calls & Leave`;
   dashDom.kpiExcValue.textContent = totalIssues.toLocaleString();
-  dashDom.kpiExcSub.innerHTML = `<span>No Calls: <strong>${pData.noCallsCount.toLocaleString()}</strong></span><span>Leave: <strong>${pData.leaveCount.toLocaleString()}</strong></span><span>Other Exc: <strong>${pData.otherExcCount.toLocaleString()}</strong></span>`;
+  dashDom.kpiExcSub.innerHTML = `<span>MTD Issues: <strong>${mData.noCallsCount + mData.leaveCount}</strong></span><span>YTD Issues: <strong>${yData.noCallsCount + yData.leaveCount}</strong></span><span>Other Exc YTD: <strong>${yData.otherExcCount.toLocaleString()}</strong></span>`;
 
-  dashDom.kpiGeoValue.textContent = `${mData.inRangePct}%`;
+  dashDom.kpiGeoValue.textContent = `${pData.inRangePct ?? mData.inRangePct}%`;
   dashDom.kpiGeoSub.innerHTML = `<span>Location: <strong>Within Geofence Range</strong></span>`;
 }
 
@@ -2560,7 +2839,7 @@ function renderDashboardPieCharts() {
   if (!dashState.data) return;
   const { charts } = dashState.data;
   const period = dashState.period;
-  const periodLabel = period === "daily" ? "Daily" : period === "weekly" ? "Weekly" : "Monthly";
+  const periodLabel = period === "ytd" ? "YTD" : "MTD";
   dashDom.pieTitle.textContent = `${periodLabel} Call Type, Call Nature & Team Share Breakdown`;
 
   // 1. call_attendence CallType pie
@@ -2587,7 +2866,7 @@ function renderDashboardPieCharts() {
   renderPieLegend(dashDom.pieCallNatureLegend, cnSlices);
 
   // 3. Team Share of Calls pie
-  const teamCallKey = period === "daily" ? "dailyCalls" : period === "weekly" ? "weeklyCalls" : "monthlyCalls";
+  const teamCallKey = period === "ytd" ? "ytdCalls" : "monthlyCalls";
   const teamSlices = (charts.teamPerformance || [])
     .map((t, idx) => ({
       label: t.name,
@@ -2613,7 +2892,7 @@ function renderEmployeeBarChart() {
   if (metric !== "period_comparison") {
     sorted.sort((a, b) => Number(b[metric] || 0) - Number(a[metric] || 0));
   } else {
-    const sortField = dashState.period === "daily" ? "dailyCalls" : dashState.period === "weekly" ? "weeklyCalls" : "monthlyCalls";
+    const sortField = dashState.period === "ytd" ? "ytdCalls" : "monthlyCalls";
     sorted.sort((a, b) => Number(b[sortField] || 0) - Number(a[sortField] || 0));
   }
 
@@ -2640,13 +2919,13 @@ function renderEmployeeBarChart() {
   let series = [];
   if (metric === "period_comparison") {
     series = [
-      { key: "dailyCalls", label: "Daily Calls", color: "#2563eb" },
-      { key: "weeklyCalls", label: "Weekly Calls", color: "#d97706" },
-      { key: "monthlyCalls", label: "Monthly Calls", color: "#059669" },
+      { key: "monthlyCalls", label: "MTD Calls", color: "#059669" },
+      { key: "ytdCalls", label: "YTD Calls", color: "#0d9488" },
     ];
   } else {
     const labelMap = {
-      monthlyCalls: ["Monthly Calls Done", "#059669"],
+      monthlyCalls: ["MTD Calls Done", "#059669"],
+      ytdCalls: ["YTD Calls Done", "#0d9488"],
       weeklyCalls: ["Weekly Calls Done", "#d97706"],
       dailyCalls: ["Daily Calls Done", "#2563eb"],
       monthlyLcdCalls: ["Provider Calls (live_call_details)", "#4f46e5"],
@@ -3211,15 +3490,12 @@ async function loadLiveCallDetailsInteractiveTable() {
 // ---------------------------------------------------------------------------
 dashDom.periodBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
-    dashState.period = btn.dataset.dashPeriod || "monthly";
+    dashState.period = btn.dataset.dashPeriod || "mtd";
     dashDom.periodBtns.forEach((b) => {
       const active = b === btn;
       b.classList.toggle("active", active);
       b.setAttribute("aria-selected", String(active));
     });
-    // Sync trend mode with period if desired
-    dashState.trendMode = dashState.period;
-    dashDom.trendTabs.forEach((t) => t.classList.toggle("active", t.dataset.trendMode === dashState.trendMode));
     renderAllDashboardViews();
   });
 });

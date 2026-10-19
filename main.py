@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import calendar
+import base64
 from copy import copy
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -21,7 +22,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -37,6 +38,10 @@ PUBLIC_DIR = BASE_DIR / "public"
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 ATTENDANCE_PREVIEW_ROWS = 50
 SESSION_LIFETIME = timedelta(hours=4)
+AUTH_SESSION_LIFETIME = timedelta(hours=8)
+AUTH_COOKIE_NAME = "ikon_session"
+AUTH_PASSWORD_ITERATIONS = 310_000
+AUTH_SCHEMA_READY = False
 
 EXPECTED_COLUMNS = [
     "Legend", "Team", "Zone", "Region", "Dept. Territory Code",
@@ -82,7 +87,7 @@ HEADER_ALIASES = {
 
 load_dotenv(BASE_DIR / ".env", override=True)
 logger = logging.getLogger("uvicorn.error")
-app = FastAPI(title="IKON Call", version="2.0.0")
+app = FastAPI(title="IKON Call Performance System", version="2.0.0")
 
 
 class UploadSession(BaseModel):
@@ -104,6 +109,31 @@ class ExportRequest(BaseModel):
     originalRows: list[int]
     columnNumbers: list[int]
     insertAtRow: int
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+    can_read: bool = True
+    can_add: bool = False
+    can_edit: bool = False
+    can_delete: bool = False
+    role: str = "user"
+
+
+class UserUpdateRequest(BaseModel):
+    password: str | None = None
+    can_read: bool | None = None
+    can_add: bool | None = None
+    can_edit: bool | None = None
+    can_delete: bool | None = None
+    role: str | None = None
+    is_active: bool | None = None
 
 
 upload_sessions: dict[str, UploadSession] = {}
@@ -220,6 +250,207 @@ def get_database_engine() -> Engine:
         connect_args={"connect_timeout": 5},
     )
     return database_engine
+
+
+def normalize_auth_username(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+
+
+def hash_auth_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        AUTH_PASSWORD_ITERATIONS,
+    )
+    encode = base64.urlsafe_b64encode
+    return "pbkdf2_sha256${}${}${}".format(
+        AUTH_PASSWORD_ITERATIONS,
+        encode(salt).decode("ascii"),
+        encode(digest).decode("ascii"),
+    )
+
+
+def verify_auth_password(password: str, stored_hash: str) -> bool:
+    try:
+        algorithm, iterations_text, salt_text, digest_text = stored_hash.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        iterations = int(iterations_text)
+        salt = base64.urlsafe_b64decode(salt_text.encode("ascii"))
+        expected = base64.urlsafe_b64decode(digest_text.encode("ascii"))
+        actual = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            iterations,
+        )
+        return secrets.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False
+
+
+def auth_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def ensure_auth_schema() -> None:
+    """Create the database-backed auth tables and seed the configured admin once."""
+    global AUTH_SCHEMA_READY
+    if AUTH_SCHEMA_READY:
+        return
+
+    admin_username = normalize_auth_username(os.getenv("AUTH_ADMIN_USERNAME", "admin"))
+    admin_password = os.getenv("AUTH_ADMIN_PASSWORD", "").strip()
+    if not admin_username:
+        raise ValueError("AUTH_ADMIN_USERNAME cannot be empty.")
+
+    with get_database_engine().begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS public.app_users (
+                id BIGSERIAL PRIMARY KEY,
+                username VARCHAR(100) NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT 'user',
+                can_read BOOLEAN NOT NULL DEFAULT TRUE,
+                can_add BOOLEAN NOT NULL DEFAULT FALSE,
+                can_edit BOOLEAN NOT NULL DEFAULT FALSE,
+                can_delete BOOLEAN NOT NULL DEFAULT FALSE,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS public.app_sessions (
+                session_hash CHAR(64) PRIMARY KEY,
+                user_id BIGINT NOT NULL REFERENCES public.app_users(id) ON DELETE CASCADE,
+                expires_at TIMESTAMPTZ NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        connection.execute(text("""
+            CREATE INDEX IF NOT EXISTS app_sessions_expires_at_idx
+            ON public.app_sessions (expires_at)
+        """))
+        if admin_password:
+            connection.execute(
+                text("""
+                    INSERT INTO public.app_users
+                        (username, password_hash, role, can_read, can_add, can_edit, can_delete)
+                    VALUES
+                        (:username, :password_hash, 'admin', TRUE, TRUE, TRUE, TRUE)
+                    ON CONFLICT (username) DO NOTHING
+                """),
+                {
+                    "username": admin_username,
+                    "password_hash": hash_auth_password(admin_password),
+                },
+            )
+        connection.execute(text("DELETE FROM public.app_sessions WHERE expires_at <= CURRENT_TIMESTAMP"))
+
+    AUTH_SCHEMA_READY = True
+
+
+def serialize_auth_user(row: Any) -> dict[str, Any]:
+    role = str(row.get("role") or "user").casefold()
+    is_admin = role == "admin"
+    return {
+        "id": int(row["id"]),
+        "username": str(row["username"]),
+        "role": "admin" if is_admin else "user",
+        "isActive": bool(row.get("is_active", True)),
+        "permissions": {
+            "read": is_admin or bool(row.get("can_read")),
+            "add": is_admin or bool(row.get("can_add")),
+            "edit": is_admin or bool(row.get("can_edit")),
+            "delete": is_admin or bool(row.get("can_delete")),
+        },
+        "createdAt": row["created_at"].isoformat() if row.get("created_at") else None,
+    }
+
+
+def get_authenticated_user(request: Request, allow_missing: bool = False) -> dict[str, Any] | None:
+    ensure_auth_schema()
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token:
+        if allow_missing:
+            return None
+        raise HTTPException(status_code=401, detail="Authentication required. Please log in.")
+
+    with get_database_engine().connect() as connection:
+        row = connection.execute(
+            text("""
+                SELECT
+                    u.id, u.username, u.role, u.can_read, u.can_add,
+                    u.can_edit, u.can_delete, u.is_active, u.created_at
+                FROM public.app_sessions AS s
+                JOIN public.app_users AS u ON u.id = s.user_id
+                WHERE s.session_hash = :session_hash
+                  AND s.expires_at > CURRENT_TIMESTAMP
+                  AND u.is_active = TRUE
+            """),
+            {"session_hash": auth_token_hash(token)},
+        ).mappings().first()
+
+    if row is None:
+        if allow_missing:
+            return None
+        raise HTTPException(status_code=401, detail="Your session has expired. Please log in again.")
+    return serialize_auth_user(row)
+
+
+def require_auth_permission(request: Request, permission: str) -> dict[str, Any]:
+    user = get_authenticated_user(request)
+    if user["role"] != "admin" and not user["permissions"].get(permission, False):
+        raise HTTPException(status_code=403, detail=f"You do not have '{permission}' permission.")
+    return user
+
+
+def auth_required_permission(path: str, method: str) -> str | None:
+    if path.startswith("/api/auth/users"):
+        return "admin"
+    if method in {"GET", "HEAD", "OPTIONS"}:
+        return "read"
+    if path.endswith("/export"):
+        return "read"
+    if method == "POST":
+        return "add"
+    if method in {"PUT", "PATCH"}:
+        return "edit"
+    if method == "DELETE":
+        return "delete"
+    return "read"
+
+
+AUTH_PUBLIC_API_PATHS = {
+    "/api/health",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/me",
+}
+
+
+@app.middleware("http")
+async def enforce_authentication(request: Request, call_next):
+    path = request.url.path
+    if not path.startswith("/api/") or path in AUTH_PUBLIC_API_PATHS:
+        return await call_next(request)
+
+    try:
+        permission = auth_required_permission(path, request.method)
+        if permission == "admin":
+            user = require_auth_permission(request, "admin")
+        else:
+            user = require_auth_permission(request, permission or "read")
+        request.state.auth_user = user
+        return await call_next(request)
+    except HTTPException as error:
+        return JSONResponse({"error": str(error.detail)}, status_code=error.status_code)
+    except Exception as error:
+        logger.exception("Authentication check failed", exc_info=error)
+        return JSONResponse({"error": "Authentication service is unavailable."}, status_code=503)
 
 
 def read_editable_data(content: bytes, sheet_name: str) -> dict[str, Any]:
@@ -378,6 +609,212 @@ async def json_exception(request: Request, exception: Exception):
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "backend": "FastAPI"}
+
+
+@app.post("/api/auth/login")
+def auth_login(payload: LoginRequest) -> JSONResponse:
+    ensure_auth_schema()
+    username = normalize_auth_username(payload.username)
+    if not username or not payload.password:
+        raise HTTPException(status_code=400, detail="Username and password are required.")
+
+    with get_database_engine().connect() as connection:
+        row = connection.execute(
+            text("""
+                SELECT
+                    id, username, password_hash, role, can_read, can_add,
+                    can_edit, can_delete, is_active, created_at
+                FROM public.app_users
+                WHERE username = :username
+            """),
+            {"username": username},
+        ).mappings().first()
+
+    if row is None or not row["is_active"] or not verify_auth_password(payload.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+
+    session_token = secrets.token_urlsafe(48)
+    expires_at = datetime.now(timezone.utc) + AUTH_SESSION_LIFETIME
+    with get_database_engine().begin() as connection:
+        connection.execute(
+            text("""
+                INSERT INTO public.app_sessions (session_hash, user_id, expires_at)
+                VALUES (:session_hash, :user_id, :expires_at)
+            """),
+            {
+                "session_hash": auth_token_hash(session_token),
+                "user_id": row["id"],
+                "expires_at": expires_at,
+            },
+        )
+
+    result = JSONResponse({"authenticated": True, "user": serialize_auth_user(row)})
+    result.set_cookie(
+        AUTH_COOKIE_NAME,
+        session_token,
+        max_age=int(AUTH_SESSION_LIFETIME.total_seconds()),
+        httponly=True,
+        samesite="lax",
+        secure=os.getenv("AUTH_COOKIE_SECURE", "false").strip().casefold() == "true",
+    )
+    return result
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request) -> JSONResponse:
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if token:
+        ensure_auth_schema()
+        with get_database_engine().begin() as connection:
+            connection.execute(
+                text("DELETE FROM public.app_sessions WHERE session_hash = :session_hash"),
+                {"session_hash": auth_token_hash(token)},
+            )
+    result = JSONResponse({"authenticated": False})
+    result.delete_cookie(AUTH_COOKIE_NAME)
+    return result
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request) -> dict[str, Any]:
+    user = get_authenticated_user(request, allow_missing=True)
+    return {"authenticated": user is not None, "user": user}
+
+
+@app.get("/api/auth/users")
+def auth_list_users(request: Request) -> dict[str, Any]:
+    require_auth_permission(request, "admin")
+    with get_database_engine().connect() as connection:
+        rows = connection.execute(
+            text("""
+                SELECT id, username, role, can_read, can_add, can_edit,
+                       can_delete, is_active, created_at
+                FROM public.app_users
+                ORDER BY username
+            """),
+        ).mappings().all()
+    return {"rows": [serialize_auth_user(row) for row in rows]}
+
+
+@app.post("/api/auth/users", status_code=201)
+def auth_create_user(payload: UserCreateRequest, request: Request) -> dict[str, Any]:
+    require_auth_permission(request, "admin")
+    username = normalize_auth_username(payload.username)
+    if not re.fullmatch(r"[a-z0-9._-]{3,100}", username):
+        raise HTTPException(status_code=400, detail="Username must be 3-100 characters using letters, numbers, dot, underscore, or hyphen.")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must contain at least 8 characters.")
+    role = payload.role.strip().casefold()
+    if role not in {"user", "admin"}:
+        raise HTTPException(status_code=400, detail="Role must be user or admin.")
+    is_admin = role == "admin"
+
+    try:
+        with get_database_engine().begin() as connection:
+            row = connection.execute(
+                text("""
+                    INSERT INTO public.app_users
+                        (username, password_hash, role, can_read, can_add, can_edit, can_delete)
+                    VALUES
+                        (:username, :password_hash, :role, :can_read, :can_add, :can_edit, :can_delete)
+                    RETURNING id, username, role, can_read, can_add, can_edit,
+                              can_delete, is_active, created_at
+                """),
+                {
+                    "username": username,
+                    "password_hash": hash_auth_password(payload.password),
+                    "role": role,
+                    "can_read": is_admin or payload.can_read,
+                    "can_add": is_admin or payload.can_add,
+                    "can_edit": is_admin or payload.can_edit,
+                    "can_delete": is_admin or payload.can_delete,
+                },
+            ).mappings().one()
+    except IntegrityError as error:
+        raise HTTPException(status_code=409, detail="That username already exists.") from error
+    return {"user": serialize_auth_user(row)}
+
+
+@app.patch("/api/auth/users/{user_id}")
+def auth_update_user(user_id: int, payload: UserUpdateRequest, request: Request) -> dict[str, Any]:
+    current_user = require_auth_permission(request, "admin")
+    if user_id == current_user["id"] and payload.is_active is False:
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own account.")
+
+    updates: list[str] = []
+    params: dict[str, Any] = {"user_id": user_id}
+    if payload.password is not None:
+        if len(payload.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must contain at least 8 characters.")
+        updates.append("password_hash = :password_hash")
+        params["password_hash"] = hash_auth_password(payload.password)
+    for field in ("can_read", "can_add", "can_edit", "can_delete", "is_active"):
+        value = getattr(payload, field)
+        if value is not None:
+            updates.append(f"{field} = :{field}")
+            params[field] = value
+    if payload.role is not None:
+        role = payload.role.strip().casefold()
+        if role not in {"user", "admin"}:
+            raise HTTPException(status_code=400, detail="Role must be user or admin.")
+        updates.append("role = :role")
+        params["role"] = role
+        if role == "admin":
+            updates = [item for item in updates if not item.startswith("can_")]
+            for permission in ("can_read", "can_add", "can_edit", "can_delete"):
+                params.pop(permission, None)
+            updates.extend(["can_read = TRUE", "can_add = TRUE", "can_edit = TRUE", "can_delete = TRUE"])
+    if not updates:
+        raise HTTPException(status_code=400, detail="No user changes were supplied.")
+
+    with get_database_engine().begin() as connection:
+        row = connection.execute(
+            text(f"""
+                UPDATE public.app_users
+                SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :user_id
+                RETURNING id, username, role, can_read, can_add, can_edit,
+                          can_delete, is_active, created_at
+            """),
+            params,
+        ).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {"user": serialize_auth_user(row)}
+
+
+@app.delete("/api/auth/users/{user_id}")
+def auth_deactivate_user(user_id: int, request: Request) -> dict[str, Any]:
+    current_user = require_auth_permission(request, "admin")
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own account.")
+    with get_database_engine().begin() as connection:
+        row = connection.execute(
+            text("""
+                UPDATE public.app_users
+                SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :user_id
+                RETURNING id, username, role, can_read, can_add, can_edit,
+                          can_delete, is_active, created_at
+            """),
+            {"user_id": user_id},
+        ).mappings().first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {"user": serialize_auth_user(row)}
+
+
+@app.get("/", include_in_schema=False)
+def application_entry(request: Request) -> FileResponse:
+    # API authorization is the security boundary; this route only provides a
+    # convenient first-run login page for unauthenticated browser visits.
+    target = PUBLIC_DIR / ("index.html" if request.cookies.get(AUTH_COOKIE_NAME) else "login.html")
+    return FileResponse(target)
+
+
+@app.get("/login", include_in_schema=False)
+def login_page() -> FileResponse:
+    return FileResponse(PUBLIC_DIR / "login.html")
 
 
 EXPECTED_MOBILE_LIVE_CALLS_COLUMNS = [
@@ -2329,8 +2766,8 @@ def fetch_team_summary_data(
             record["ikon_used"] = int(bool(activity_totals["mtd_att"] or activity_totals["mtd_calls"]))
             record["calls_total"] = activity_totals["calls_total"]
             record["avg_call"] = (
-                activity_totals["calls_total"] / workdays_to_report
-                if workdays_to_report
+                activity_totals["calls_total"] / record["reps"] / workdays_to_report
+                if record["reps"] and workdays_to_report
                 else 0
             )
             for day in month_days:
@@ -2468,8 +2905,8 @@ def fetch_team_summary_data(
 
     total_calls = sum(activity_total_call_counts.values()) if activity_by_position else None
     average_calls = (
-        total_calls / workdays_to_report
-        if total_calls is not None and workdays_to_report
+        total_calls / total_reps / workdays_to_report
+        if total_calls is not None and total_reps and workdays_to_report
         else None
     )
 
@@ -4360,7 +4797,7 @@ def delete_ff_master_staff(
 
 
 # ---------------------------------------------------------------------------
-# IKON Call Performance Dashboard – Analytics & Interactive Tables
+# IKON Call Performance System – Analytics & Interactive Tables
 # (public.call_attendence & public.live_call_details)
 # ---------------------------------------------------------------------------
 
@@ -4403,7 +4840,7 @@ def get_dashboard_performance(
     call_type: str = "",
     call_nature: str = "",
 ) -> dict[str, Any]:
-    """Aggregate KPI cards, bar/pie/line charts, and employee daily/weekly/monthly call performance."""
+    """Aggregate KPI cards, charts, and employee MTD/YTD call performance."""
     req_report_date = _parse_iso_date_optional(report_date, "report_date")
     req_date_from = _parse_iso_date_optional(date_from, "date_from")
     req_date_to = _parse_iso_date_optional(date_to, "date_to")
@@ -4537,7 +4974,7 @@ def get_dashboard_performance(
     max_lcd_date = max(lcd_dates) if lcd_dates else max_available_date
     selected_date = req_report_date or max_available_date
 
-    # Define Daily, Weekly (7-day rolling ending at selected_date), and Monthly (MTD) windows
+    # Define Daily, Weekly (7-day rolling), Monthly (MTD), and Yearly (YTD) windows
     daily_date = selected_date
     lcd_daily_date = min(selected_date, max_lcd_date) if lcd_dates else selected_date
     yesterday_date = selected_date - timedelta(days=1)
@@ -4545,6 +4982,7 @@ def get_dashboard_performance(
     prev_week_start = week_start_date - timedelta(days=7)
     prev_week_end = week_start_date - timedelta(days=1)
     month_start_date = selected_date.replace(day=1)
+    year_start_date = selected_date.replace(month=1, day=1)
 
     range_start = req_date_from or min(month_start_date, min_available_date)
     range_end = req_date_to or selected_date
@@ -4626,29 +5064,39 @@ def get_dashboard_performance(
                 "yesterdayCalls": 0,
                 "weeklyCalls": 0,
                 "monthlyCalls": 0,
+                "ytdCalls": 0,
                 "dailyAtt": 0,
                 "weeklyAttDays": set(),
                 "monthlyAttDays": set(),
+                "ytdAttDays": set(),
                 "dailyNoCalls": 0,
                 "weeklyNoCallDays": set(),
                 "monthlyNoCallDays": set(),
+                "ytdNoCallDays": set(),
                 "dailyLcdCalls": 0,
                 "weeklyLcdCalls": 0,
                 "monthlyLcdCalls": 0,
+                "ytdLcdCalls": 0,
                 "dailyProducts": 0,
                 "weeklyProducts": 0,
                 "monthlyProducts": 0,
+                "ytdProducts": 0,
                 "dailyLeave": 0,
                 "weeklyLeaveDays": set(),
                 "monthlyLeaveDays": set(),
+                "ytdLeaveDays": set(),
                 "dailyOtherExc": 0,
                 "weeklyOtherExc": 0,
                 "monthlyOtherExc": 0,
+                "ytdOtherExc": 0,
                 "doctorsSet": set(),
                 "inRangeCalls": 0,
                 "totalGeoCalls": 0,
+                "ytdInRangeCalls": 0,
+                "ytdTotalGeoCalls": 0,
                 "activeCallDaysWeek": set(),
                 "activeCallDaysMonth": set(),
+                "activeCallDaysYear": set(),
                 "weekBuckets": {"W1": 0, "W2": 0, "W3": 0, "W4": 0, "W5": 0},
                 "dailySeries": {},
                 "dailyLcdSeries": {},
@@ -4705,39 +5153,47 @@ def get_dashboard_performance(
                 "dailyCalls": 0,
                 "weeklyCalls": 0,
                 "monthlyCalls": 0,
+                "ytdCalls": 0,
                 "dailyAttSet": set(),
                 "weeklyAttSet": set(),
                 "monthlyAttSet": set(),
+                "ytdAttSet": set(),
                 "dailyEmpSet": set(),
                 "weeklyEmpSet": set(),
                 "monthlyEmpSet": set(),
+                "ytdEmpSet": set(),
                 "lcdDailyCalls": 0,
                 "lcdWeeklyCalls": 0,
                 "lcdMonthlyCalls": 0,
+                "lcdYtdCalls": 0,
                 "dailyProducts": 0,
                 "weeklyProducts": 0,
                 "monthlyProducts": 0,
+                "ytdProducts": 0,
                 "leaveCount": 0,
                 "noCallsCount": 0,
             }
             store[clean_key] = item
         return item
 
-    # Pie chart counters for daily, weekly, monthly
+    # Pie chart counters for daily, weekly, MTD, and YTD
     call_type_pie = {
         "daily": {"CALL": {"rows": 0, "done": 0}, "EXCEPTION": {"rows": 0, "done": 0}, "NO CALLS": {"rows": 0, "done": 0}},
         "weekly": {"CALL": {"rows": 0, "done": 0}, "EXCEPTION": {"rows": 0, "done": 0}, "NO CALLS": {"rows": 0, "done": 0}},
         "monthly": {"CALL": {"rows": 0, "done": 0}, "EXCEPTION": {"rows": 0, "done": 0}, "NO CALLS": {"rows": 0, "done": 0}},
+        "ytd": {"CALL": {"rows": 0, "done": 0}, "EXCEPTION": {"rows": 0, "done": 0}, "NO CALLS": {"rows": 0, "done": 0}},
     }
     call_nature_pie = {
         "daily": {"Provider Calls": 0, "Attendance": 0, "LEAVE": 0, "Others Exc Calls": 0},
         "weekly": {"Provider Calls": 0, "Attendance": 0, "LEAVE": 0, "Others Exc Calls": 0},
         "monthly": {"Provider Calls": 0, "Attendance": 0, "LEAVE": 0, "Others Exc Calls": 0},
+        "ytd": {"Provider Calls": 0, "Attendance": 0, "LEAVE": 0, "Others Exc Calls": 0},
     }
     geometer_pie = {
         "daily": {},
         "weekly": {},
         "monthly": {},
+        "ytd": {},
     }
 
     # KPI accumulators
@@ -4766,6 +5222,7 @@ def get_dashboard_performance(
         in_weekly = (week_start_date <= dt <= daily_date)
         in_prev_weekly = (prev_week_start <= dt <= prev_week_end)
         in_monthly = (month_start_date <= dt <= daily_date)
+        in_ytd = (year_start_date <= dt <= daily_date)
         in_range = (range_start <= dt <= range_end)
 
         if in_range:
@@ -4788,6 +5245,10 @@ def get_dashboard_performance(
             call_type_pie["monthly"].setdefault(c_type, {"rows": 0, "done": 0})
             call_type_pie["monthly"][c_type]["rows"] += 1
             call_type_pie["monthly"][c_type]["done"] += max(done, 1 if c_type == "NO CALLS" else 0)
+        if in_ytd:
+            call_type_pie["ytd"].setdefault(c_type, {"rows": 0, "done": 0})
+            call_type_pie["ytd"][c_type]["rows"] += 1
+            call_type_pie["ytd"][c_type]["done"] += max(done, 1 if c_type == "NO CALLS" else 0)
 
         if in_range:
             d_bucket = get_daily_bucket(dt)
@@ -4836,6 +5297,15 @@ def get_dashboard_performance(
                 t_bucket["monthlyEmpSet"].add(emp_key)
                 m_bucket["monthlyEmpSet"].add(emp_key)
                 town_bucket["monthlyEmpSet"].add(emp_key)
+            if in_ytd:
+                emp["ytdCalls"] += done
+                emp["activeCallDaysYear"].add(dt)
+                t_bucket["ytdCalls"] += done
+                m_bucket["ytdCalls"] += done
+                town_bucket["ytdCalls"] += done
+                t_bucket["ytdEmpSet"].add(emp_key)
+                m_bucket["ytdEmpSet"].add(emp_key)
+                town_bucket["ytdEmpSet"].add(emp_key)
         elif c_type == "EXCEPTION" and done > 0:
             iso_dt = dt.isoformat()
             emp["dailyAttSeries"][iso_dt] = 1
@@ -4854,6 +5324,11 @@ def get_dashboard_performance(
                 t_bucket["monthlyAttSet"].add((emp_key, dt))
                 m_bucket["monthlyAttSet"].add((emp_key, dt))
                 town_bucket["monthlyAttSet"].add((emp_key, dt))
+            if in_ytd:
+                emp["ytdAttDays"].add(dt)
+                t_bucket["ytdAttSet"].add((emp_key, dt))
+                m_bucket["ytdAttSet"].add((emp_key, dt))
+                town_bucket["ytdAttSet"].add((emp_key, dt))
         elif c_type == "NO CALLS":
             if in_daily:
                 emp["dailyNoCalls"] += 1
@@ -4861,6 +5336,8 @@ def get_dashboard_performance(
                 emp["weeklyNoCallDays"].add(dt)
             if in_monthly:
                 emp["monthlyNoCallDays"].add(dt)
+            if in_ytd:
+                emp["ytdNoCallDays"].add(dt)
                 t_bucket["noCallsCount"] += 1
                 m_bucket["noCallsCount"] += 1
                 town_bucket["noCallsCount"] += 1
@@ -4890,6 +5367,7 @@ def get_dashboard_performance(
         in_daily = (dt == lcd_daily_date)
         in_weekly = (week_start_date <= dt <= daily_date)
         in_monthly = (month_start_date <= dt <= daily_date)
+        in_ytd = (year_start_date <= dt <= lcd_daily_date)
         in_range = (range_start <= dt <= range_end)
 
         if in_range:
@@ -4909,6 +5387,9 @@ def get_dashboard_performance(
         if in_monthly:
             call_nature_pie["monthly"][c_nature] = call_nature_pie["monthly"].get(c_nature, 0) + max(noofcalls, 1)
             geometer_pie["monthly"][geo] = geometer_pie["monthly"].get(geo, 0) + 1
+        if in_ytd:
+            call_nature_pie["ytd"][c_nature] = call_nature_pie["ytd"].get(c_nature, 0) + max(noofcalls, 1)
+            geometer_pie["ytd"][geo] = geometer_pie["ytd"].get(geo, 0) + 1
 
         if in_range:
             d_bucket = get_daily_bucket(dt)
@@ -4928,6 +5409,10 @@ def get_dashboard_performance(
             emp["totalGeoCalls"] += 1
             if geo.casefold() == "in range":
                 emp["inRangeCalls"] += 1
+        if in_ytd:
+            emp["ytdTotalGeoCalls"] += 1
+            if geo.casefold() == "in range":
+                emp["ytdInRangeCalls"] += 1
 
         if c_nature == "Provider Calls":
             call_val = max(noofcalls, 1)
@@ -4962,6 +5447,15 @@ def get_dashboard_performance(
                 t_bucket["monthlyProducts"] += noofproducts
                 m_bucket["monthlyProducts"] += noofproducts
                 town_bucket["monthlyProducts"] += noofproducts
+            if in_ytd:
+                emp["ytdLcdCalls"] += call_val
+                emp["ytdProducts"] += noofproducts
+                t_bucket["lcdYtdCalls"] += call_val
+                m_bucket["lcdYtdCalls"] += call_val
+                town_bucket["lcdYtdCalls"] += call_val
+                t_bucket["ytdProducts"] += noofproducts
+                m_bucket["ytdProducts"] += noofproducts
+                town_bucket["ytdProducts"] += noofproducts
         elif c_nature == "LEAVE":
             if in_daily:
                 emp["dailyLeave"] += 1
@@ -4972,6 +5466,8 @@ def get_dashboard_performance(
                 t_bucket["leaveCount"] += 1
                 m_bucket["leaveCount"] += 1
                 town_bucket["leaveCount"] += 1
+            if in_ytd:
+                emp["ytdLeaveDays"].add(dt)
         elif c_nature == "Others Exc Calls":
             if in_daily:
                 emp["dailyOtherExc"] += max(noofcalls, 1)
@@ -4979,6 +5475,8 @@ def get_dashboard_performance(
                 emp["weeklyOtherExc"] += max(noofcalls, 1)
             if in_monthly:
                 emp["monthlyOtherExc"] += max(noofcalls, 1)
+            if in_ytd:
+                emp["ytdOtherExc"] += max(noofcalls, 1)
 
     # Finalize Daily Trend series across the date range
     daily_trend_list: list[dict[str, Any]] = []
@@ -5129,11 +5627,15 @@ def get_dashboard_performance(
     for emp in emp_stats.values():
         w_att = len(emp["weeklyAttDays"])
         m_att = len(emp["monthlyAttDays"])
+        y_att = len(emp["ytdAttDays"])
         w_call_days = len(emp["activeCallDaysWeek"])
         m_call_days = len(emp["activeCallDaysMonth"])
+        y_call_days = len(emp["activeCallDaysYear"])
         w_denom = max(w_att, w_call_days, 1)
         m_denom = max(m_att, m_call_days, 1)
+        y_denom = max(y_att, y_call_days, 1)
         geo_pct = round((emp["inRangeCalls"] / emp["totalGeoCalls"]) * 100, 1) if emp["totalGeoCalls"] else 100.0
+        ytd_geo_pct = round((emp["ytdInRangeCalls"] / emp["ytdTotalGeoCalls"]) * 100, 1) if emp["ytdTotalGeoCalls"] else 100.0
 
         employee_list.append({
             "employeeKey": emp["employeeKey"],
@@ -5146,28 +5648,37 @@ def get_dashboard_performance(
             "yesterdayCalls": emp["yesterdayCalls"],
             "weeklyCalls": emp["weeklyCalls"],
             "monthlyCalls": emp["monthlyCalls"],
+            "ytdCalls": emp["ytdCalls"],
             "dailyAtt": emp["dailyAtt"],
             "weeklyAttDays": w_att,
             "monthlyAttDays": m_att,
+            "ytdAttDays": y_att,
             "dailyNoCalls": emp["dailyNoCalls"],
             "weeklyNoCallDays": len(emp["weeklyNoCallDays"]),
             "monthlyNoCallDays": len(emp["monthlyNoCallDays"]),
+            "ytdNoCallDays": len(emp["ytdNoCallDays"]),
             "dailyLcdCalls": emp["dailyLcdCalls"],
             "weeklyLcdCalls": emp["weeklyLcdCalls"],
             "monthlyLcdCalls": emp["monthlyLcdCalls"],
+            "ytdLcdCalls": emp["ytdLcdCalls"],
             "dailyProducts": emp["dailyProducts"],
             "weeklyProducts": emp["weeklyProducts"],
             "monthlyProducts": emp["monthlyProducts"],
+            "ytdProducts": emp["ytdProducts"],
             "dailyLeave": emp["dailyLeave"],
             "weeklyLeaveDays": len(emp["weeklyLeaveDays"]),
             "monthlyLeaveDays": len(emp["monthlyLeaveDays"]),
+            "ytdLeaveDays": len(emp["ytdLeaveDays"]),
             "dailyOtherExc": emp["dailyOtherExc"],
             "weeklyOtherExc": emp["weeklyOtherExc"],
             "monthlyOtherExc": emp["monthlyOtherExc"],
+            "ytdOtherExc": emp["ytdOtherExc"],
             "uniqueDoctors": len(emp["doctorsSet"]),
             "inRangePct": geo_pct,
+            "ytdInRangePct": ytd_geo_pct,
             "weeklyAvgCalls": round(emp["weeklyCalls"] / w_denom, 1) if emp["weeklyCalls"] else 0.0,
             "monthlyAvgCalls": round(emp["monthlyCalls"] / m_denom, 1) if emp["monthlyCalls"] else 0.0,
+            "ytdAvgCalls": round(emp["ytdCalls"] / y_denom, 1) if emp["ytdCalls"] else 0.0,
             "weekBuckets": emp["weekBuckets"],
             "dailySeries": emp["dailySeries"],
             "dailyLcdSeries": emp["dailyLcdSeries"],
@@ -5175,7 +5686,7 @@ def get_dashboard_performance(
         })
 
     employee_list.sort(
-        key=lambda item: (item["monthlyCalls"], item["weeklyCalls"], item["dailyCalls"], item["monthlyLcdCalls"]),
+        key=lambda item: (item["ytdCalls"], item["monthlyCalls"], item["weeklyCalls"], item["dailyCalls"], item["ytdLcdCalls"]),
         reverse=True,
     )
 
@@ -5183,6 +5694,7 @@ def get_dashboard_performance(
         out = []
         for g in store.values():
             m_emps = len(g["monthlyEmpSet"])
+            y_emps = len(g["ytdEmpSet"])
             w_emps = len(g["weeklyEmpSet"])
             d_emps = len(g["dailyEmpSet"])
             out.append({
@@ -5191,68 +5703,85 @@ def get_dashboard_performance(
                 "dailyCalls": g["dailyCalls"],
                 "weeklyCalls": g["weeklyCalls"],
                 "monthlyCalls": g["monthlyCalls"],
+                "ytdCalls": g["ytdCalls"],
                 "dailyAtt": len(g["dailyAttSet"]),
                 "weeklyAtt": len(g["weeklyAttSet"]),
                 "monthlyAtt": len(g["monthlyAttSet"]),
+                "ytdAtt": len(g["ytdAttSet"]),
                 "dailyActiveEmployees": d_emps,
                 "weeklyActiveEmployees": w_emps,
                 "monthlyActiveEmployees": m_emps,
+                "ytdActiveEmployees": y_emps,
                 "lcdDailyCalls": g["lcdDailyCalls"],
                 "lcdWeeklyCalls": g["lcdWeeklyCalls"],
                 "lcdMonthlyCalls": g["lcdMonthlyCalls"],
+                "lcdYtdCalls": g["lcdYtdCalls"],
                 "dailyProducts": g["dailyProducts"],
                 "weeklyProducts": g["weeklyProducts"],
                 "monthlyProducts": g["monthlyProducts"],
+                "ytdProducts": g["ytdProducts"],
                 "leaveCount": g["leaveCount"],
                 "noCallsCount": g["noCallsCount"],
                 "avgMonthlyCallsPerEmp": round(g["monthlyCalls"] / m_emps, 1) if m_emps else 0.0,
+                "avgYtdCallsPerEmp": round(g["ytdCalls"] / y_emps, 1) if y_emps else 0.0,
             })
-        out.sort(key=lambda x: (x["monthlyCalls"], x["lcdMonthlyCalls"]), reverse=True)
+        out.sort(key=lambda x: (x["ytdCalls"], x["monthlyCalls"], x["lcdYtdCalls"]), reverse=True)
         return out
 
     team_performance = finalize_group_list(team_agg)
     manager_performance = finalize_group_list(manager_agg)
     town_performance = finalize_group_list(town_agg)
 
-    # Compute KPI totals across Daily, Weekly, Monthly
+    # Compute KPI totals across Daily, Weekly, MTD, and YTD
     total_daily_calls = sum(e["dailyCalls"] for e in employee_list)
     total_weekly_calls = sum(e["weeklyCalls"] for e in employee_list)
     total_monthly_calls = sum(e["monthlyCalls"] for e in employee_list)
+    total_ytd_calls = sum(e["ytdCalls"] for e in employee_list)
 
     active_daily_emps = sum(1 for e in employee_list if e["dailyCalls"] > 0 or e["dailyAtt"] > 0 or e["dailyLcdCalls"] > 0)
     active_weekly_emps = sum(1 for e in employee_list if e["weeklyCalls"] > 0 or e["weeklyAttDays"] > 0 or e["weeklyLcdCalls"] > 0)
     active_monthly_emps = sum(1 for e in employee_list if e["monthlyCalls"] > 0 or e["monthlyAttDays"] > 0 or e["monthlyLcdCalls"] > 0)
+    active_ytd_emps = sum(1 for e in employee_list if e["ytdCalls"] > 0 or e["ytdAttDays"] > 0 or e["ytdLcdCalls"] > 0)
 
     call_daily_emps = sum(1 for e in employee_list if e["dailyCalls"] > 0)
     call_weekly_emps = sum(1 for e in employee_list if e["weeklyCalls"] > 0)
     call_monthly_emps = sum(1 for e in employee_list if e["monthlyCalls"] > 0)
+    call_ytd_emps = sum(1 for e in employee_list if e["ytdCalls"] > 0)
 
     daily_att_count = sum(e["dailyAtt"] for e in employee_list)
     weekly_att_days = sum(e["weeklyAttDays"] for e in employee_list)
     monthly_att_days = sum(e["monthlyAttDays"] for e in employee_list)
+    ytd_att_days = sum(e["ytdAttDays"] for e in employee_list)
 
     lcd_daily_calls = sum(e["dailyLcdCalls"] for e in employee_list)
     lcd_weekly_calls = sum(e["weeklyLcdCalls"] for e in employee_list)
     lcd_monthly_calls = sum(e["monthlyLcdCalls"] for e in employee_list)
+    lcd_ytd_calls = sum(e["ytdLcdCalls"] for e in employee_list)
 
     lcd_daily_products = sum(e["dailyProducts"] for e in employee_list)
     lcd_weekly_products = sum(e["weeklyProducts"] for e in employee_list)
     lcd_monthly_products = sum(e["monthlyProducts"] for e in employee_list)
+    lcd_ytd_products = sum(e["ytdProducts"] for e in employee_list)
 
     daily_no_calls = sum(e["dailyNoCalls"] for e in employee_list)
     weekly_no_calls = sum(e["weeklyNoCallDays"] for e in employee_list)
     monthly_no_calls = sum(e["monthlyNoCallDays"] for e in employee_list)
+    ytd_no_calls = sum(e["ytdNoCallDays"] for e in employee_list)
 
     daily_leaves = sum(e["dailyLeave"] for e in employee_list)
     weekly_leaves = sum(e["weeklyLeaveDays"] for e in employee_list)
     monthly_leaves = sum(e["monthlyLeaveDays"] for e in employee_list)
+    ytd_leaves = sum(e["ytdLeaveDays"] for e in employee_list)
 
     daily_other_exc = sum(e["dailyOtherExc"] for e in employee_list)
     weekly_other_exc = sum(e["weeklyOtherExc"] for e in employee_list)
     monthly_other_exc = sum(e["monthlyOtherExc"] for e in employee_list)
+    ytd_other_exc = sum(e["ytdOtherExc"] for e in employee_list)
 
     in_range_total = sum(geometer_pie["monthly"].get(k, 0) for k in geometer_pie["monthly"] if k.casefold() == "in range")
     geo_total = sum(geometer_pie["monthly"].values())
+    ytd_in_range_total = sum(geometer_pie["ytd"].get(k, 0) for k in geometer_pie["ytd"] if k.casefold() == "in range")
+    ytd_geo_total = sum(geometer_pie["ytd"].values())
 
     kpis = {
         "totalEmployees": len(employee_list),
@@ -5300,6 +5829,36 @@ def get_dashboard_performance(
             "otherExcCount": monthly_other_exc,
             "avgCallsPerEmp": round(total_monthly_calls / call_monthly_emps, 1) if call_monthly_emps else 0.0,
             "inRangePct": round((in_range_total / geo_total) * 100, 1) if geo_total else 100.0,
+        },
+        "mtd": {
+            "label": f"{month_start_date.strftime('%d %b')} – {daily_date.strftime('%d %b %Y')}",
+            "callsDone": total_monthly_calls,
+            "prevCallsDone": 0,
+            "activeEmployees": active_monthly_emps,
+            "callEmployees": call_monthly_emps,
+            "attendanceCount": monthly_att_days,
+            "noCallsCount": monthly_no_calls,
+            "lcdProviderCalls": lcd_monthly_calls,
+            "lcdProducts": lcd_monthly_products,
+            "leaveCount": monthly_leaves,
+            "otherExcCount": monthly_other_exc,
+            "avgCallsPerEmp": round(total_monthly_calls / call_monthly_emps, 1) if call_monthly_emps else 0.0,
+            "inRangePct": round((in_range_total / geo_total) * 100, 1) if geo_total else 100.0,
+        },
+        "ytd": {
+            "label": f"{year_start_date.strftime('%d %b')} – {daily_date.strftime('%d %b %Y')}",
+            "callsDone": total_ytd_calls,
+            "prevCallsDone": 0,
+            "activeEmployees": active_ytd_emps,
+            "callEmployees": call_ytd_emps,
+            "attendanceCount": ytd_att_days,
+            "noCallsCount": ytd_no_calls,
+            "lcdProviderCalls": lcd_ytd_calls,
+            "lcdProducts": lcd_ytd_products,
+            "leaveCount": ytd_leaves,
+            "otherExcCount": ytd_other_exc,
+            "avgCallsPerEmp": round(total_ytd_calls / call_ytd_emps, 1) if call_ytd_emps else 0.0,
+            "inRangePct": round((ytd_in_range_total / ytd_geo_total) * 100, 1) if ytd_geo_total else 100.0,
         },
     }
 

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Upload and edit attendance workbooks in the browser." />
-    <title>IKON Call</title>
+    <title>IKON Call Performance System</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
@@ -12,39 +12,45 @@
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#" aria-label="IKON Call home">
-        <span class="brand-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" role="img"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-1A3.5 3.5 0 0 0 8 18.5V20M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M16.5 5.15a3 3 0 0 1 0 5.7" /></svg>
+      <div class="header-identity">
+        <span class="greenstar-brand" title="Greenstar" aria-label="Greenstar">
+          <img class="greenstar-full-logo" src="/greenstar%20green.jpg" alt="Greenstar" />
+          <img class="greenstar-short-logo" src="/greenstar%20short.jfif" alt="Greenstar" />
         </span>
-        <span class="brand-copy"><strong>IKON Call</strong></span>
-      </a>
+      </div>
       <div class="workspace-meta">
         <span class="workspace-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" role="img"><ellipse cx="12" cy="5" rx="7" ry="3" /><path d="M5 5v6c0 1.66 3.13 3 7 3s7-1.34 7-3V5M5 11v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" /></svg>
         </span>
         <span><strong>Local workspace</strong><small>Pharma + FMCG</small></span>
       </div>
+      <div id="auth-controls" class="auth-controls hidden">
+        <span id="auth-user-label" class="auth-user-label" aria-label="Signed-in user"></span>
+        <button id="auth-logout-btn" type="button" class="auth-logout-btn"><span aria-hidden="true">↪</span> Log out</button>
+      </div>
+      <div class="sidebar-footer-credit">Prepared By: Muhammad Sohaib</div>
     </header>
 
     <main class="page-shell">
       <nav class="primary-tabs" aria-label="Application sections">
-        <button class="primary-tab active" data-page="attendance"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-5M12 16V8M16 16v-8" /></svg></span>Call Performance</button>
-        <button class="primary-tab" data-page="fmcg-ikon-mtd"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-4M12 16V8M16 16v-6" /></svg></span>FMCG MTD Summary</button>
-        <button class="primary-tab" data-page="pharma-ikon-mtd"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-4M12 16V8M16 16v-6" /></svg></span>Pharma MTD Summary</button>
-        <button class="primary-tab" data-page="editor"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><circle cx="17" cy="8.5" r="2.6" /><path d="M15.5 14.2a4.8 4.8 0 0 1 5 4.8" /></svg></span>Staff Management</button>
+        <div class="sidebar-section-title">DASHBOARDS &amp; PANELS</div>
+        <button class="primary-tab active" data-page="attendance"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-5M12 16V8M16 16v-8" /></svg></span><span class="nav-label">Call Performance</span></button>
+        <button class="primary-tab" data-page="fmcg-ikon-mtd"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-4M12 16V8M16 16v-6" /></svg></span><span class="nav-label">FMCG MTD Summary</span></button>
+        <button class="primary-tab" data-page="pharma-ikon-mtd"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-4M12 16V8M16 16v-6" /></svg></span><span class="nav-label">Pharma MTD Summary</span></button>
+        <button class="primary-tab" data-page="editor"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><circle cx="17" cy="8.5" r="2.6" /><path d="M15.5 14.2a4.8 4.8 0 0 1 5 4.8" /></svg></span><span class="nav-label">Staff Management</span></button>
+        <button id="auth-users-tab" class="primary-tab hidden" data-page="users"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 11a2.5 2.5 0 1 0 0-5M15.5 14.2a4.7 4.7 0 0 1 5 4.8" /></svg></span><span class="nav-label">User Management</span></button>
       </nav>
 
       <section id="attendance-page" class="page-panel">
         <div class="page-heading fmcg-page-heading dash-hero-heading">
           <div>
             <p class="eyebrow">EXECUTIVE ANALYTICS · CALL_ATTENDENCE &amp; LIVE_CALL_DETAILS</p>
-            <h1>IKON Call Performance Dashboard <span id="dash-heading-date">Latest Available</span></h1>
+            <h1>IKON Call Performance System <span id="dash-heading-date">Latest Available</span></h1>
           </div>
           <div class="dash-header-controls">
             <div class="dash-period-switcher" role="tablist" aria-label="Performance Period">
-              <button type="button" class="dash-period-btn" data-dash-period="daily" role="tab" aria-selected="false">Daily</button>
-              <button type="button" class="dash-period-btn" data-dash-period="weekly" role="tab" aria-selected="false">Weekly</button>
-              <button type="button" class="dash-period-btn active" data-dash-period="monthly" role="tab" aria-selected="true">Monthly</button>
+              <button type="button" class="dash-period-btn active" data-dash-period="mtd" role="tab" aria-selected="true">MTD</button>
+              <button type="button" class="dash-period-btn" data-dash-period="ytd" role="tab" aria-selected="false">YTD</button>
             </div>
             <button type="button" id="dash-filter-toggle-btn" class="button secondary dash-filter-toggle active" aria-controls="dash-filter-card" aria-expanded="true" aria-label="Hide filters" title="Hide filters">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.2 7.1v5.4l-3.6 1.8v-7.2L4 5Z" /></svg>
@@ -283,20 +289,19 @@
           </section>
         </div>
 
-        <!-- Charts Row 2: Bar Charts (Every Employee Daily/Weekly/Monthly Bar Chart + Team/Manager Bar Chart) -->
+        <!-- Charts Row 2: Bar Charts (Every Employee MTD/YTD Bar Chart + Team/Manager Bar Chart) -->
         <div class="dash-charts-row dash-charts-row-bottom">
           <section class="card dash-chart-card dash-emp-bar-card">
             <div class="dash-chart-header">
               <div>
                 <p class="step">BAR CHART · EVERY EMPLOYEE CALL PERFORMANCE</p>
-                <h2 id="dash-emp-bar-title">Employee Daily, Weekly &amp; Monthly Call Performance</h2>
+                <h2 id="dash-emp-bar-title">Employee MTD &amp; YTD Call Performance</h2>
               </div>
               <div class="dash-chart-controls">
                 <select id="dash-emp-bar-metric" class="dash-chart-select" aria-label="Employee bar metric">
-                  <option value="period_comparison">Daily vs Weekly vs Monthly Calls</option>
-                  <option value="monthlyCalls">Monthly Calls Done</option>
-                  <option value="weeklyCalls">Weekly Calls Done</option>
-                  <option value="dailyCalls">Daily Calls Done</option>
+                  <option value="period_comparison">MTD vs YTD Calls</option>
+                  <option value="monthlyCalls">MTD Calls Done</option>
+                  <option value="ytdCalls">YTD Calls Done</option>
                   <option value="monthlyLcdCalls">Provider Calls</option>
                   <option value="monthlyProducts">Products Promoted</option>
                   <option value="monthlyAttDays">Monthly Attendance Days</option>
@@ -620,11 +625,12 @@
       <section id="fmcg-ikon-mtd-page" class="page-panel hidden">
         <div class="page-heading fmcg-page-heading">
           <div>
-            <p class="eyebrow">PERFORMANCE REPORTING</p>
             <h1 id="fmcg-summary-heading">FMCG Team – IKON MTD Call Performance Summary Till <span id="fmcg-heading-date">Latest Available</span></h1>
-            <p>FMCG field-force employee roster, territory mapping, vacancy tracking, and MTD call performance summary.</p>
           </div>
           <div class="fmcg-header-actions">
+            <button id="fmcg-refresh-summary" type="button" class="button secondary fmcg-refresh-btn" title="Refresh FMCG summary" aria-label="Refresh FMCG summary">
+              <span class="refresh-icon" aria-hidden="true">↻</span> Refresh
+            </button>
             <label class="fmcg-date-picker">
               <span>Reporting Date</span>
               <input id="fmcg-date-filter" type="date" />
@@ -826,11 +832,12 @@
       <section id="pharma-ikon-mtd-page" class="page-panel hidden">
         <div class="page-heading fmcg-page-heading">
           <div>
-            <p class="eyebrow">PERFORMANCE REPORTING</p>
             <h1 id="pharma-summary-heading">PHARMA Team – IKON MTD Call Performance Summary Till <span id="pharma-heading-date">Latest Available</span></h1>
-            <p>PHARMA field-force employee roster, territory mapping, vacancy tracking, and MTD call performance summary.</p>
           </div>
           <div class="fmcg-header-actions">
+            <button id="pharma-refresh-summary" type="button" class="button secondary fmcg-refresh-btn" title="Refresh Pharma summary" aria-label="Refresh Pharma summary">
+              <span class="refresh-icon" aria-hidden="true">↻</span> Refresh
+            </button>
             <label class="fmcg-date-picker">
               <span>Reporting Date</span>
               <input id="pharma-date-filter" type="date" />
@@ -1185,6 +1192,36 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <section id="users-page" class="page-panel hidden">
+        <div class="page-heading fmcg-page-heading">
+          <div>
+            <p class="eyebrow">ACCESS CONTROL</p>
+            <h1>Application Users</h1>
+            <p>Create accounts and assign read, add, edit, or delete permissions.</p>
+          </div>
+        </div>
+        <section class="card auth-admin-card">
+          <div class="section-title">
+            <div><h2>Create User</h2><p>Passwords are stored as salted PBKDF2 hashes in PostgreSQL.</p></div>
+          </div>
+          <form id="auth-user-create-form" class="auth-user-form">
+            <label><span>Username</span><input id="auth-new-username" required minlength="3" maxlength="100" autocomplete="off" /></label>
+            <label><span>Password</span><span class="auth-password-field"><input id="auth-new-password" type="password" required minlength="8" autocomplete="new-password" /><button type="button" class="password-toggle" data-toggle-password>Show</button></span></label>
+            <label><span>Role</span><select id="auth-new-role"><option value="user">User</option><option value="admin">Admin</option></select></label>
+            <label class="auth-checkbox"><input id="auth-new-read" type="checkbox" checked /> Read</label>
+            <label class="auth-checkbox"><input id="auth-new-add" type="checkbox" /> Add</label>
+            <label class="auth-checkbox"><input id="auth-new-edit" type="checkbox" /> Edit</label>
+            <label class="auth-checkbox"><input id="auth-new-delete" type="checkbox" /> Delete</label>
+            <button type="submit" class="button primary">Create User</button>
+          </form>
+          <div id="auth-user-notice" class="notice hidden" role="status"></div>
+        </section>
+        <section class="card auth-admin-card">
+          <div class="section-title"><div><h2>Existing Users</h2><p>Deactivate an account to prevent further login.</p></div><button id="auth-users-refresh" type="button" class="button secondary">Refresh</button></div>
+          <div class="table-wrap"><table class="auth-users-table"><thead><tr><th>Username</th><th>Role</th><th>Permissions</th><th>Status</th><th>Actions</th></tr></thead><tbody id="auth-users-tbody"><tr><td colspan="5" class="fmcg-state-cell">Loading users…</td></tr></tbody></table></div>
+        </section>
       </section>
     </main>
     <script type="module" src="/app.js"></script>

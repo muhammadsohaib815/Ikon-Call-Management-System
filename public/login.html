@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in · IKON Call Performance System</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+    <style>
+      :root { color-scheme: light; --deep-green: #123d2e; --primary-green: #0d6b4f; --primary-green-dark: #0d6b4f; --surface: #fff; --background: #f6faef; --border: #a6d76b; --danger: #a12635; }
+      * { box-sizing: border-box; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; color: var(--deep-green); background: radial-gradient(circle at top left, #fff 0, var(--background) 55%, #d9f0e4 100%); font-family: "DM Sans", system-ui, sans-serif; }
+      .login-card { width: min(100%, 420px); padding: 36px; background: rgba(255,255,255,.96); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 18px 50px rgba(37,37,37,.12); }
+      .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+      .brand-mark { width: 44px; height: 44px; display: grid; place-items: center; color: #fff; background: var(--primary-green); border-radius: 12px; font-weight: 800; font-size: 1.15rem; }
+      .brand strong { display: block; font: 800 1.35rem Manrope, sans-serif; letter-spacing: -.04em; }
+      .brand small { color: #477664; }
+      h1 { margin: 0; font: 800 1.65rem Manrope, sans-serif; letter-spacing: -.04em; }
+      .intro { margin: 8px 0 24px; color: #477664; line-height: 1.5; }
+      label { display: grid; gap: 6px; margin-top: 16px; color: #245341; font-size: .83rem; font-weight: 700; }
+      input { width: 100%; height: 44px; padding: 0 12px; color: var(--deep-green); background: #fff; border: 1px solid var(--border); border-radius: 8px; font: inherit; outline: none; }
+      .password-field { position: relative; }
+      .password-field input { padding-right: 64px; }
+      .password-toggle { position: absolute; top: 50%; right: 7px; width: auto; height: 30px; margin: 0; padding: 0 7px; color: var(--primary-green-dark); background: transparent; border: 0; font-size: .75rem; font-weight: 700; transform: translateY(-50%); }
+      .password-toggle:hover { color: var(--deep-green); background: #e7f6ef; border: 0; }
+      input:focus { border-color: var(--primary-green); box-shadow: 0 0 0 3px rgba(11,143,106,.18); }
+      button { width: 100%; height: 44px; margin-top: 24px; color: #fff; background: var(--primary-green); border: 1px solid var(--primary-green); border-radius: 8px; font: 700 .95rem inherit; cursor: pointer; }
+      button:hover { background: var(--primary-green-dark); border-color: var(--primary-green-dark); }
+      button:disabled { cursor: wait; opacity: .65; }
+      .error { min-height: 20px; margin-top: 14px; color: var(--danger); font-size: .83rem; }
+      .security-note { margin: 24px 0 0; padding-top: 16px; color: #6a8177; border-top: 1px solid #d9ece2; font-size: .75rem; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <main class="login-card">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">IK</span><span><strong>IKON Call Performance System</strong><small>Secure workspace</small></span></div>
+      <h1>Sign in</h1>
+      <p class="intro">Use your assigned username and password to access call performance data.</p>
+      <form id="login-form">
+        <label>Username<input id="username" name="username" autocomplete="username" required autofocus /></label>
+        <label>Password<span class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required /><button type="button" class="password-toggle" data-toggle-password>Show</button></span></label>
+        <button id="login-button" type="submit">Sign in</button>
+        <div id="login-error" class="error" role="alert"></div>
+      </form>
+      <p class="security-note">Access is controlled by database-backed permissions. Contact an administrator if you need Add, Edit, or Delete access.</p>
+    </main>
+    <script>
+      const form = document.querySelector("#login-form");
+      const button = document.querySelector("#login-button");
+      const error = document.querySelector("#login-error");
+      fetch("/api/auth/me").then((response) => response.json()).then((result) => {
+        if (result.authenticated) window.location.replace("/");
+      }).catch(() => {});
+      document.querySelector("[data-toggle-password]").addEventListener("click", (event) => {
+        const toggle = event.currentTarget;
+        const input = toggle.parentElement.querySelector("input");
+        const visible = input.type === "text";
+        input.type = visible ? "password" : "text";
+        toggle.textContent = visible ? "Show" : "Hide";
+        toggle.setAttribute("aria-pressed", String(!visible));
+      });
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        error.textContent = "";
+        button.disabled = true;
+        button.textContent = "Signing in…";
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: document.querySelector("#username").value,
+              password: document.querySelector("#password").value,
+            }),
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "Unable to sign in.");
+          window.location.replace("/");
+        } catch (loginError) {
+          error.textContent = loginError.message;
+          button.disabled = false;
+          button.textContent = "Sign in";
+        }
+      });
+    </script>
+  </body>
+</html>
