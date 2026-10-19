@@ -115,15 +115,19 @@ async function loadAuthUser() {
         <span class="auth-user-details">
           <small class="auth-user-kicker">CONNECTED USER</small>
           <strong class="auth-user-name">${escapeHtml(result.user.username)}</strong>
-          <small class="auth-user-meta">${escapeHtml(result.user.role)}</small>
+          <small class="auth-user-meta">
+            <span class="auth-user-role-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3" /><path d="M5 20a7 7 0 0 1 14 0" /></svg></span>
+            <span class="auth-user-role-text">${escapeHtml(result.user.role)}</span>
+          </small>
         </span>`;
       const displayPermissionNames = Object.entries(result.user.permissions || {})
         .filter(([, allowed]) => allowed)
         .map(([name]) => name.charAt(0).toUpperCase() + name.slice(1))
         .join(" / ");
       const userMeta = elements.authUserLabel.querySelector(".auth-user-meta");
+      const userRoleText = elements.authUserLabel.querySelector(".auth-user-role-text");
       if (userMeta) {
-        userMeta.textContent = String(result.user.role || "user").toUpperCase();
+        if (userRoleText) userRoleText.textContent = String(result.user.role || "user").toUpperCase();
         userMeta.title = displayPermissionNames ? `Permissions: ${displayPermissionNames}` : "Read access";
       }
     }
@@ -2476,7 +2480,45 @@ const dashDom = {
   lcdLast: $("#lcd-table-last"),
 };
 
+const dashBarTooltip = document.createElement("div");
+dashBarTooltip.className = "dash-bar-tooltip";
+dashBarTooltip.setAttribute("role", "tooltip");
+document.body.appendChild(dashBarTooltip);
+
+function positionDashBarTooltip(event) {
+  const offset = 14;
+  const maxLeft = window.innerWidth - dashBarTooltip.offsetWidth - 10;
+  const maxTop = window.innerHeight - dashBarTooltip.offsetHeight - 10;
+  dashBarTooltip.style.left = `${Math.max(10, Math.min(event.clientX + offset, maxLeft))}px`;
+  dashBarTooltip.style.top = `${Math.max(10, Math.min(event.clientY + offset, maxTop))}px`;
+}
+
+function bindDashBarTooltip(container) {
+  if (!container) return;
+  container.addEventListener("pointerover", (event) => {
+    const bar = event.target.closest("[data-bar-tooltip]");
+    if (!bar || !container.contains(bar)) return;
+    dashBarTooltip.textContent = bar.dataset.barTooltip || "";
+    dashBarTooltip.classList.add("is-visible");
+    positionDashBarTooltip(event);
+  });
+  container.addEventListener("pointermove", (event) => {
+    if (dashBarTooltip.classList.contains("is-visible")) positionDashBarTooltip(event);
+  });
+  container.addEventListener("pointerleave", () => dashBarTooltip.classList.remove("is-visible"));
+}
+
+bindDashBarTooltip(dashDom.empBarContainer);
+bindDashBarTooltip(dashDom.groupBarContainer);
+bindDashBarTooltip(dashDom.lineContainer);
+
 const dashMultiFilters = {
+  employee: dashDom.employeeFilter ? createExcelMultiSelect(dashDom.employeeFilter, "All Employees", (val) => {
+    dashState.employee = val;
+    dashState.empBarPage = 0;
+    dashState.matrixPage = 1;
+    loadDashboardAnalytics();
+  }) : null,
   team: dashDom.teamFilter ? createExcelMultiSelect(dashDom.teamFilter, "All Teams", (val) => {
     dashState.team = val;
     dashState.empBarPage = 0;
@@ -2504,13 +2546,6 @@ const dashMultiFilters = {
     loadDashboardAnalytics();
   }) : null,
 };
-
-dashDom.employeeFilter?.addEventListener("change", () => {
-  dashState.employee = dashDom.employeeFilter.value;
-  dashState.empBarPage = 0;
-  dashState.matrixPage = 1;
-  loadDashboardAnalytics();
-});
 
 const CHART_PALETTE = [
   "#059669",
@@ -2768,8 +2803,12 @@ function renderDashboardLineChart() {
     const areaHtml = areaD ? `<path d="${areaD}" fill="${s.color}" fill-opacity="0.10" />` : "";
     const dotsHtml = coords.map(([x, y], idx) => {
       const val = Number(points[idx][s.key] || 0);
+      const tooltipText = [
+        points[idx].label,
+        ...seriesDefs.map((metric) => `${metric.label}: ${Number(points[idx][metric.key] || 0).toLocaleString()}`),
+      ].join("\n");
       return `<g>
-        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.8" fill="#ffffff" stroke="${s.color}" stroke-width="2.2">
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="#ffffff" stroke="${s.color}" stroke-width="2.2" data-bar-tooltip="${escapeHtml(tooltipText)}" style="cursor:pointer">
           <title>${escapeHtml(points[idx].label)} · ${escapeHtml(s.label)}: ${val.toLocaleString()}</title>
         </circle>
         ${points.length <= 18 && sIdx === 0 && val > 0 ? `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" font-size="8.5" font-weight="800" fill="${s.color}">${val.toLocaleString()}</text>` : ""}
@@ -2981,7 +3020,13 @@ function renderEmployeeBarChart() {
       const bx = startX + sIdx * (barW + 1.5);
       const by = yAt(val);
       const bh = Math.max(padTop + plotH - by, val > 0 ? 2 : 0);
-      return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${s.color}" opacity="${isFocused ? "1" : "0.88"}">
+      const tooltipText = [
+        `${emp.ff_name} (${emp.ff_id})`,
+        `${s.label}: ${val.toLocaleString()}`,
+        `MTD Calls: ${Number(emp.monthlyCalls || 0).toLocaleString()}`,
+        `YTD Calls: ${Number(emp.ytdCalls || 0).toLocaleString()}`,
+      ].join("\n");
+      return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${s.color}" opacity="${isFocused ? "1" : "0.88"}" data-bar-tooltip="${escapeHtml(tooltipText)}">
         <title>${escapeHtml(emp.ff_name)} (${escapeHtml(emp.ff_id)}) · ${escapeHtml(s.label)}: ${val.toLocaleString()} (Daily: ${emp.dailyCalls}, Weekly: ${emp.weeklyCalls}, Monthly: ${emp.monthlyCalls})</title>
       </rect>`;
     }).join("");
@@ -3072,7 +3117,15 @@ function renderGroupBarChart() {
       const bx = startX + sIdx * (barW + 1.5);
       const by = yAt(val);
       const bh = Math.max(padTop + plotH - by, val > 0 ? 2 : 0);
-      return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${s.color}">
+      const tooltipText = [
+        item.name,
+        `${s.label}: ${val.toLocaleString()}`,
+        `Daily Calls: ${Number(item.dailyCalls || 0).toLocaleString()}`,
+        `Weekly Calls: ${Number(item.weeklyCalls || 0).toLocaleString()}`,
+        `MTD Calls: ${Number(item.monthlyCalls || 0).toLocaleString()}`,
+        `YTD Calls: ${Number(item.ytdCalls || 0).toLocaleString()}`,
+      ].join("\n");
+      return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barW.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${s.color}" data-bar-tooltip="${escapeHtml(tooltipText)}">
         <title>${escapeHtml(item.name)} · ${escapeHtml(s.label)}: ${val.toLocaleString()} (Active Employees: ${item.monthlyActiveEmployees})</title>
       </rect>`;
     }).join("");
@@ -3283,7 +3336,7 @@ async function loadDashboardAnalytics() {
           if (id && name) return `${id} · ${name}`;
           return id || name;
         }).filter(Boolean);
-        populateSelectOptions(dashDom.employeeFilter, "All Employees", empOptions, dashState.employee);
+        dashMultiFilters.employee?.setOptions(empOptions);
 
         populateSelectOptions(dashDom.caTeam, "All Teams", data.filters.teams || [], dashState.ca.team);
         populateSelectOptions(dashDom.caCallType, "All Call Types", ["CALL", "EXCEPTION", "NO CALLS"], dashState.ca.callType);
@@ -3298,7 +3351,7 @@ async function loadDashboardAnalytics() {
       dashMultiFilters.baseTown?.setValue(dashState.baseTown);
       dashMultiFilters.callType?.setValue(dashState.callType);
       dashMultiFilters.callNature?.setValue(dashState.callNature);
-      if (dashDom.employeeFilter) dashDom.employeeFilter.value = dashState.employee;
+      dashMultiFilters.employee?.setValue(dashState.employee);
     }
 
     renderAllDashboardViews();
@@ -3580,7 +3633,7 @@ dashDom.resetBtn?.addEventListener("click", () => {
   dashMultiFilters.baseTown?.setValue("");
   dashMultiFilters.callType?.setValue("");
   dashMultiFilters.callNature?.setValue("");
-  if (dashDom.employeeFilter) dashDom.employeeFilter.value = "";
+  dashMultiFilters.employee?.setValue("");
   if (dashDom.teamFilter) dashDom.teamFilter.value = "";
   if (dashDom.managerFilter) dashDom.managerFilter.value = "";
   if (dashDom.townFilter) dashDom.townFilter.value = "";

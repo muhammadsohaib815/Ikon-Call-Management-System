@@ -6381,65 +6381,127 @@ body.template-light .primary-tab.active {
 /* Compact connected-user presentation for the narrower sidebar. */
 @media screen and (min-width: 1181px) {
   body:not(.sidebar-collapsed) .greenstar-brand {
-    height: 58px;
-    flex-basis: 58px;
-    border-radius: 8px;
+    height: 62px;
+    flex-basis: 62px;
+    border-radius: 9px;
   }
   body:not(.sidebar-collapsed) .greenstar-brand img {
-    width: 158px;
-    height: 70px;
+    width: 165px;
+    height: 76px;
+  }
+  body:not(.sidebar-collapsed) .greenstar-brand .greenstar-full-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    transform: scale(1.38);
   }
   body:not(.sidebar-collapsed) .auth-controls {
     margin-top: 10px;
   }
   body:not(.sidebar-collapsed) .auth-user-label {
-    min-height: 108px;
-    padding: 14px 8px 10px 86px;
-    border-radius: 20px;
+    min-height: 68px;
+    padding: 7px 7px 7px 64px;
+    border-radius: 10px;
   }
   body:not(.sidebar-collapsed) .auth-user-label::before {
-    top: 13px;
-    left: -22px;
-    width: 88px;
-    height: 88px;
-    box-shadow: 0 0 0 10px rgba(5, 56, 42, .46), 0 0 0 12px rgba(192, 220, 40, .2);
+    top: 7px;
+    left: -14px;
+    width: 54px;
+    height: 54px;
+    border-color: rgba(4, 39, 28, .72);
+    box-shadow: 0 0 0 10px rgba(5, 56, 42, .46);
   }
   body:not(.sidebar-collapsed) .auth-user-label::after {
-    top: 24px;
-    right: 10px;
-    width: 48px;
-    height: 48px;
-    background-size: 12px 12px;
+    top: 15px;
+    right: 8px;
+    width: 34px;
+    height: 34px;
+    background-size: 10px 10px;
   }
   body:not(.sidebar-collapsed) .auth-user-avatar {
-    top: 28px;
-    left: 19px;
-    width: 52px;
-    height: 52px;
-    flex-basis: 52px;
-    font-size: 1.5rem;
-    box-shadow: 0 0 0 4px rgba(4, 39, 28, .72), 5px 6px 0 rgba(3, 43, 32, .72);
+    top: 15px;
+    left: 12px;
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    background: linear-gradient(145deg, #0d6b4f 10%, #4f9f43 100%);
+    border: 2px solid #0a503c;
+    font-size: 1.05rem;
+    box-shadow: 0 0 0 3px rgba(4, 39, 28, .82), 5px 6px 0 rgba(3, 43, 32, .72);
   }
   body:not(.sidebar-collapsed) .auth-user-details {
-    gap: 3px;
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 0;
+    transform: translateY(-50%);
+    align-items: center;
+    gap: 2px;
+    text-align: center;
   }
   body:not(.sidebar-collapsed) .auth-user-kicker {
-    font-size: .5rem;
-    letter-spacing: .08em;
+    font-size: .43rem;
+    letter-spacing: .06em;
   }
   body:not(.sidebar-collapsed) .auth-user-kicker::before {
-    width: 7px;
-    height: 7px;
-    margin-right: 5px;
+    width: 6px;
+    height: 6px;
+    margin-right: 4px;
   }
   body:not(.sidebar-collapsed) .auth-user-name {
-    font-size: .9rem;
+    font-size: .98rem;
+    line-height: 1;
   }
   body:not(.sidebar-collapsed) .auth-user-meta {
-    padding: 5px 9px;
-    font-size: .56rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 7px;
+    font-size: .43rem;
+  }
+  body:not(.sidebar-collapsed) .auth-user-role-icon {
+    display: inline-flex;
+    width: 8px;
+    height: 8px;
+    flex: 0 0 8px;
+  }
+  body:not(.sidebar-collapsed) .auth-user-role-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+  }
+  body:not(.sidebar-collapsed) .auth-user-meta::before {
+    content: none;
   }
   body:not(.sidebar-collapsed) .primary-tabs {
-    inset: 244px auto 90px 0;
+    inset: 196px auto 90px 0;
   }
+}
+.dash-bar-tooltip {
+  position: fixed;
+  z-index: 2000;
+  display: none;
+  max-width: 280px;
+  padding: 8px 10px;
+  color: #f4fae8;
+  background: #063526;
+  border: 1px solid var(--greenstar-lime);
+  border-radius: 7px;
+  box-shadow: 0 8px 20px rgba(0, 40, 28, .24);
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1.45;
+  pointer-events: none;
+  white-space: pre-line;
+}
+.dash-bar-tooltip.is-visible { display: block; }
+
+/* Employee filter is single-choice; hide its bulk-select control. */
+#attendance-page .dash-emp-filter-field .excel-multiselect-all {
+  display: none;
 }
