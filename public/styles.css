@@ -6377,3 +6377,69 @@ body.template-light .primary-tab.active {
     inset: 302px auto 90px 0;
   }
 }
+
+/* Compact connected-user presentation for the narrower sidebar. */
+@media screen and (min-width: 1181px) {
+  body:not(.sidebar-collapsed) .greenstar-brand {
+    height: 58px;
+    flex-basis: 58px;
+    border-radius: 8px;
+  }
+  body:not(.sidebar-collapsed) .greenstar-brand img {
+    width: 158px;
+    height: 70px;
+  }
+  body:not(.sidebar-collapsed) .auth-controls {
+    margin-top: 10px;
+  }
+  body:not(.sidebar-collapsed) .auth-user-label {
+    min-height: 108px;
+    padding: 14px 8px 10px 86px;
+    border-radius: 20px;
+  }
+  body:not(.sidebar-collapsed) .auth-user-label::before {
+    top: 13px;
+    left: -22px;
+    width: 88px;
+    height: 88px;
+    box-shadow: 0 0 0 10px rgba(5, 56, 42, .46), 0 0 0 12px rgba(192, 220, 40, .2);
+  }
+  body:not(.sidebar-collapsed) .auth-user-label::after {
+    top: 24px;
+    right: 10px;
+    width: 48px;
+    height: 48px;
+    background-size: 12px 12px;
+  }
+  body:not(.sidebar-collapsed) .auth-user-avatar {
+    top: 28px;
+    left: 19px;
+    width: 52px;
+    height: 52px;
+    flex-basis: 52px;
+    font-size: 1.5rem;
+    box-shadow: 0 0 0 4px rgba(4, 39, 28, .72), 5px 6px 0 rgba(3, 43, 32, .72);
+  }
+  body:not(.sidebar-collapsed) .auth-user-details {
+    gap: 3px;
+  }
+  body:not(.sidebar-collapsed) .auth-user-kicker {
+    font-size: .5rem;
+    letter-spacing: .08em;
+  }
+  body:not(.sidebar-collapsed) .auth-user-kicker::before {
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+  }
+  body:not(.sidebar-collapsed) .auth-user-name {
+    font-size: .9rem;
+  }
+  body:not(.sidebar-collapsed) .auth-user-meta {
+    padding: 5px 9px;
+    font-size: .56rem;
+  }
+  body:not(.sidebar-collapsed) .primary-tabs {
+    inset: 244px auto 90px 0;
+  }
+}
