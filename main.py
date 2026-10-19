@@ -1379,6 +1379,326 @@ async def upload_fmcg_mobile_live_call_summary(file: UploadFile = File(...)) -> 
         ) from error
 
 
+MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS = {
+    "Team": "team",
+    "FF.Id": "ff_id",
+    "FF.Name": "ff_name",
+    "Call Date": "call_date",
+    "Manager": "manager",
+    "Base Town": "base_town",
+    "Customer Name": "customer_name",
+    "WW": "ww",
+    "CallType": "call_type",
+    "Order": "order",
+    "Rejection": "rejection",
+    "LNG": "lng",
+    "LAT": "lat",
+    "Total Sum of NOOFCALLS": "total_sum_of_noofcalls",
+    "GeoMeter Range": "geometer_range",
+}
+MOBILE_FMCG_LIVE_CALL_HISTORY_TABLE = "mobile_fmcg_live_call_upload_history"
+
+
+def read_mobile_fmcg_live_call_frame(content: bytes, extension: str) -> pd.DataFrame:
+    """Read a Mobile FMCG Live Call file and locate its header row."""
+    canonical_by_key = {
+        header_key(column): column for column in MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS
+    }
+    error_message = (
+        "The file header does not match the 15 required Mobile FMCG Live Call columns."
+    )
+
+    if extension != ".csv":
+        return read_excel_table_with_detected_header(
+            content,
+            canonical_by_key,
+            len(MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS),
+            error_message,
+        )
+
+    sample: pd.DataFrame | None = None
+    encoding: str | None = None
+    for candidate in ("utf-8-sig", "utf-8", "latin1"):
+        try:
+            sample = pd.read_csv(
+                BytesIO(content),
+                header=None,
+                dtype=object,
+                nrows=100,
+                encoding=candidate,
+            ).fillna("")
+            encoding = candidate
+            break
+        except UnicodeDecodeError:
+            continue
+        except Exception as error:
+            raise ValueError("The file could not be read as a CSV file.") from error
+
+    if sample is None or encoding is None or sample.empty:
+        raise ValueError(error_message)
+    best_header_row, best_match_count = find_spreadsheet_header_row(
+        sample,
+        canonical_by_key,
+    )
+    if best_match_count != len(MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS):
+        raise ValueError(error_message)
+    return pd.read_csv(
+        BytesIO(content),
+        header=best_header_row,
+        dtype=object,
+        encoding=encoding,
+    )
+
+
+def clean_mobile_fmcg_live_call_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Validate and order the Mobile FMCG Live Call upload columns."""
+    canonical_by_key = {
+        header_key(column): column for column in MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS
+    }
+    renamed: dict[object, str] = {}
+    seen: set[str] = set()
+    unsupported: list[str] = []
+
+    for raw_column in frame.columns:
+        source_name = re.sub(r"\s+", " ", str(raw_column or "")).strip()
+        canonical = canonical_by_key.get(header_key(source_name))
+        if canonical is None:
+            if frame[raw_column].map(lambda value: not _mobile_live_call_value_is_empty(value)).any():
+                unsupported.append(source_name or "unnamed column")
+            continue
+        if canonical in seen:
+            raise ValueError(f"The file contains the '{canonical}' column more than once.")
+        seen.add(canonical)
+        renamed[raw_column] = canonical
+
+    missing = [column for column in MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS if column not in seen]
+    if missing:
+        raise ValueError(f"The file is missing required column(s): {', '.join(missing)}.")
+    if unsupported:
+        raise ValueError(
+            "The file contains column(s) not present in Mobile FMCG Live Call: "
+            + ", ".join(unsupported)
+            + "."
+        )
+
+    cleaned = frame[list(renamed)].rename(columns=renamed).dropna(how="all")
+    nonblank_rows = cleaned.apply(
+        lambda row: any(not _mobile_live_call_value_is_empty(value) for value in row),
+        axis=1,
+    )
+    cleaned = cleaned.loc[
+        nonblank_rows,
+        list(MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS),
+    ].reset_index(drop=True)
+    if cleaned.empty:
+        raise ValueError("The uploaded file contains no data rows.")
+    return cleaned
+
+
+def prepare_mobile_fmcg_live_call_rows(
+    frame: pd.DataFrame,
+    schema: list[dict[str, Any]],
+) -> tuple[list[dict[str, object]], int]:
+    """Coerce upload values and remove duplicate rows within the file."""
+    schema_by_name = {str(column["column_name"]).casefold(): column for column in schema}
+    missing_database_columns = [
+        database_column
+        for database_column in MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS.values()
+        if database_column.casefold() not in schema_by_name
+    ]
+    if missing_database_columns:
+        raise ValueError(
+            "Mobile FMCG Live Call is missing column(s): "
+            + ", ".join(missing_database_columns)
+            + "."
+        )
+
+    prepared: list[dict[str, object]] = []
+    seen_row_keys: set[str] = set()
+    duplicate_rows = 0
+    for row_number, (_, row) in enumerate(frame.iterrows(), start=2):
+        values: dict[str, object] = {}
+        for file_column, database_column in MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS.items():
+            values[database_column] = _coerce_mobile_live_call_value(
+                row[file_column],
+                schema_by_name[database_column.casefold()],
+                row_number,
+                file_column,
+            )
+        row_key = _mobile_live_call_record_key(values)
+        if row_key in seen_row_keys:
+            duplicate_rows += 1
+            continue
+        seen_row_keys.add(row_key)
+        prepared.append(values)
+    return prepared, duplicate_rows
+
+
+def store_mobile_fmcg_live_call_upload(
+    content: bytes,
+    filename: str,
+    extension: str,
+) -> dict[str, Any] | JSONResponse:
+    """Insert Mobile FMCG Live Call rows with file and exact-row deduplication."""
+    frame = clean_mobile_fmcg_live_call_frame(
+        read_mobile_fmcg_live_call_frame(content, extension)
+    )
+    file_hash = hashlib.sha256(content).hexdigest()
+    target_ref = "public.mobile_fmcg_live_call"
+    history_ref = f"public.{MOBILE_FMCG_LIVE_CALL_HISTORY_TABLE}"
+
+    with get_database_engine().begin() as connection:
+        schema = _mobile_live_call_schema(connection, "mobile_fmcg_live_call")
+        if not schema:
+            raise ValueError("Mobile FMCG Live Call was not found.")
+        prepared_rows, duplicate_in_file = prepare_mobile_fmcg_live_call_rows(frame, schema)
+
+        connection.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS {history_ref} (
+                file_sha256 VARCHAR(64) PRIMARY KEY,
+                original_filename TEXT NOT NULL,
+                uploaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                total_row_count INTEGER NOT NULL,
+                inserted_row_count INTEGER NOT NULL DEFAULT 0,
+                skipped_row_count INTEGER NOT NULL DEFAULT 0
+            )
+        """))
+        connection.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext('public.mobile_fmcg_live_call.upload'))")
+        )
+        reserved = connection.execute(
+            text(f"""
+                INSERT INTO {history_ref} (file_sha256, original_filename, total_row_count)
+                VALUES (:file_sha256, :original_filename, :total_row_count)
+                ON CONFLICT (file_sha256) DO NOTHING
+                RETURNING file_sha256
+            """),
+            {
+                "file_sha256": file_hash,
+                "original_filename": Path(filename).name,
+                "total_row_count": len(frame),
+            },
+        ).scalar_one_or_none()
+        if reserved is None:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "status": "already_uploaded",
+                    "message": "File Already Uploaded: no rows were added to Mobile FMCG Live Call.",
+                    "insertedRows": 0,
+                    "skippedRows": len(frame),
+                    "totalRows": len(frame),
+                },
+            )
+
+        database_columns = list(MOBILE_FMCG_LIVE_CALL_FILE_COLUMNS.values())
+        insert_columns = ", ".join(quote_pg_identifier(column) for column in database_columns)
+        selected_columns = ", ".join(
+            f"staged.{quote_pg_identifier(column)}" for column in database_columns
+        )
+        duplicate_predicate = " AND ".join(
+            f"existing.{quote_pg_identifier(column)} "
+            f"IS NOT DISTINCT FROM staged.{quote_pg_identifier(column)}"
+            for column in database_columns
+        )
+        connection.execute(text(f"""
+            CREATE TEMP TABLE mobile_fmcg_live_call_upload_stage
+            ON COMMIT DROP
+            AS SELECT {insert_columns} FROM {target_ref} WITH NO DATA
+        """))
+        if prepared_rows:
+            stage_parameters = ", ".join(f":{column}" for column in database_columns)
+            connection.execute(
+                text(f"""
+                    INSERT INTO mobile_fmcg_live_call_upload_stage ({insert_columns})
+                    VALUES ({stage_parameters})
+                """),
+                prepared_rows,
+            )
+            insert_result = connection.execute(text(f"""
+                INSERT INTO {target_ref} ({insert_columns})
+                SELECT {selected_columns}
+                FROM mobile_fmcg_live_call_upload_stage AS staged
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM {target_ref} AS existing
+                    WHERE {duplicate_predicate}
+                )
+            """))
+            inserted_rows = max(int(insert_result.rowcount or 0), 0)
+        else:
+            inserted_rows = 0
+        skipped_rows = duplicate_in_file + len(prepared_rows) - inserted_rows
+
+        connection.execute(
+            text(f"""
+                UPDATE {history_ref}
+                SET inserted_row_count = :inserted_rows,
+                    skipped_row_count = :skipped_rows
+                WHERE file_sha256 = :file_sha256
+            """),
+            {
+                "inserted_rows": inserted_rows,
+                "skipped_rows": skipped_rows,
+                "file_sha256": file_hash,
+            },
+        )
+
+    return {
+        "status": "success",
+        "filename": Path(filename).name,
+        "message": (
+            f"Upload complete: {inserted_rows:,} new row(s) inserted into Mobile FMCG Live Call; "
+            f"{skipped_rows:,} duplicate row(s) skipped."
+        ),
+        "insertedRows": inserted_rows,
+        "skippedRows": skipped_rows,
+        "totalRows": len(frame),
+    }
+
+
+@app.post("/api/attendance/mobile-fmcg-live-call")
+async def upload_mobile_fmcg_live_call(file: UploadFile = File(...)) -> Any:
+    """Validate a Mobile FMCG Live Call file and store its new rows."""
+    filename = file.filename or ""
+    extension = Path(filename).suffix.casefold()
+    if extension not in {".csv", ".xlsx", ".xls"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Choose a valid CSV, XLSX, or XLS file for Mobile FMCG Live Call.",
+        )
+
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    await file.close()
+    if not content:
+        raise HTTPException(status_code=400, detail="The Mobile FMCG Live Call file is empty.")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="The Mobile FMCG Live Call file exceeds the 200 MB upload limit.",
+        )
+
+    if extension == ".xlsx":
+        try:
+            with ZipFile(BytesIO(content)) as archive:
+                if "[Content_Types].xml" not in archive.namelist():
+                    raise ValueError("missing XLSX content types")
+        except (BadZipFile, ValueError) as error:
+            raise HTTPException(
+                status_code=400,
+                detail="The Mobile FMCG Live Call XLSX file is not valid.",
+            ) from error
+
+    try:
+        return store_mobile_fmcg_live_call_upload(content, filename, extension)
+    except (SQLAlchemyError, ValueError, TypeError) as error:
+        logger.exception("mobile_fmcg_live_call upload failed", exc_info=error)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Upload Failed: no rows were added. {error}",
+        ) from error
+
+
 def unique_headers(values: list[object]) -> list[str]:
     """Give blank and duplicate spreadsheet headers stable display names."""
     counts: dict[str, int] = {}

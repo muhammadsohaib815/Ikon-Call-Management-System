@@ -1,0 +1,7 @@
+host=aws-0-ap-southeast-2.pooler.supabase.com
+port=5432
+database=postgres
+user=postgres.zdvgilognaoovsgkqntm
+
+
+postgresql://postgres.zdvgilognaoovsgkqntm:[YOUR-PASSWORD]@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres

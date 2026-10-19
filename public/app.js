@@ -1,6 +1,7 @@
 const state = {
   attendance: { id: null, filename: "", columns: [], rows: [], offset: 0, total: 0, hasNext: false },
   fmcgMobileLiveCall: { id: null, filename: "", size: 0 },
+  mobileFmcgLiveCall: { filename: "", insertedRows: 0, skippedRows: 0 },
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -27,6 +28,9 @@ const elements = {
   fmcgMobileLiveCallInput: $("#fmcg-mobile-live-call-file-input"),
   fmcgMobileLiveCallDropZone: $("#fmcg-mobile-live-call-drop-zone"),
   fmcgMobileLiveCallStatus: $("#fmcg-mobile-live-call-status"),
+  mobileFmcgLiveCallInput: $("#mobile-fmcg-live-call-file-input"),
+  mobileFmcgLiveCallDropZone: $("#mobile-fmcg-live-call-drop-zone"),
+  mobileFmcgLiveCallStatus: $("#mobile-fmcg-live-call-status"),
   authControls: $("#auth-controls"),
   authUserLabel: $("#auth-user-label"),
   authLogoutButton: $("#auth-logout-btn"),
@@ -347,6 +351,69 @@ elements.fmcgMobileLiveCallInput.addEventListener("change", () => uploadFmcgMobi
   elements.fmcgMobileLiveCallDropZone.classList.remove("dragging");
 }));
 elements.fmcgMobileLiveCallDropZone.addEventListener("drop", (event) => uploadFmcgMobileLiveCallSummary(event.dataTransfer.files[0]));
+
+function setMobileFmcgLiveCallStatus(message, error = false) {
+  elements.mobileFmcgLiveCallStatus.textContent = message;
+  elements.mobileFmcgLiveCallStatus.classList.toggle("error", error);
+}
+
+async function uploadMobileFmcgLiveCall(file) {
+  if (!file) return;
+  const extension = file.name.toLowerCase().split(".").pop();
+  if (!["csv", "xlsx", "xls"].includes(extension)) {
+    setMobileFmcgLiveCallStatus("Choose a valid CSV, XLSX, or XLS file for Mobile FMCG Live Call.", true);
+    return;
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    setMobileFmcgLiveCallStatus("The Mobile FMCG Live Call file exceeds the 200 MB upload limit.", true);
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  setMobileFmcgLiveCallStatus("Uploading Mobile FMCG Live Call…");
+  try {
+    const response = await api("/api/attendance/mobile-fmcg-live-call", {
+      method: "POST",
+      body: formData,
+    });
+    const result = await response.json();
+    state.mobileFmcgLiveCall = {
+      filename: result.filename || file.name,
+      insertedRows: Number(result.insertedRows || 0),
+      skippedRows: Number(result.skippedRows || 0),
+    };
+    setMobileFmcgLiveCallStatus(
+      result.message || `${file.name} uploaded to Mobile FMCG Live Call.`
+    );
+  } catch (error) {
+    setMobileFmcgLiveCallStatus(
+      error.message || "Unable to upload the Mobile FMCG Live Call file.",
+      true,
+    );
+  } finally {
+    elements.mobileFmcgLiveCallInput.value = "";
+  }
+}
+
+elements.mobileFmcgLiveCallInput.addEventListener("change", () => {
+  uploadMobileFmcgLiveCall(elements.mobileFmcgLiveCallInput.files[0]);
+});
+["dragenter", "dragover"].forEach((eventName) => {
+  elements.mobileFmcgLiveCallDropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    elements.mobileFmcgLiveCallDropZone.classList.add("dragging");
+  });
+});
+["dragleave", "drop"].forEach((eventName) => {
+  elements.mobileFmcgLiveCallDropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    elements.mobileFmcgLiveCallDropZone.classList.remove("dragging");
+  });
+});
+elements.mobileFmcgLiveCallDropZone.addEventListener("drop", (event) => {
+  uploadMobileFmcgLiveCall(event.dataTransfer.files[0]);
+});
 
 function buildBaseTeamSummaryColumns(regionLabel = "FMCG Region") {
   return [
