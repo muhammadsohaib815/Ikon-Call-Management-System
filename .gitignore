@@ -3,6 +3,6 @@ __pycache__/
 .venv/
 *.py[cod]
 .env
-data/csv/
+data/
 npm-debug.log*
 *.tmp
