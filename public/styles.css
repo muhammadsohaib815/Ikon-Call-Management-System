@@ -131,10 +131,13 @@ button { cursor: pointer; }
 }
 .brand { display: flex; align-items: center; gap: 14px; color: white; text-decoration: none; }
 .header-identity { display: flex; align-items: center; min-width: 0; gap: 16px; }
+.brand-logo-row { display: flex; align-items: center; min-width: 0; gap: 8px; }
 .header-brand-divider { width: 1px; height: 34px; background: var(--border); }
 .greenstar-brand { display: inline-flex; align-items: center; width: 132px; height: 46px; overflow: hidden; flex: 0 0 132px; border-radius: 7px; background: #fff; }
 .greenstar-brand img { display: block; width: 132px; height: 64px; object-fit: contain; }
 .greenstar-short-logo { display: none !important; }
+.ikon-brand { display: inline-flex; width: 70px; height: 46px; overflow: hidden; flex: 0 0 70px; border-radius: 7px; background: #cc4433; }
+.ikon-brand img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .brand-icon, .workspace-icon { display: grid; place-items: center; flex: 0 0 auto; border-radius: 10px; background: var(--color-primary); }
 .brand-icon { width: 56px; height: 56px; }
 .brand-icon svg { width: 31px; height: 31px; }
@@ -2120,6 +2123,38 @@ body.has-table-fullscreen {
   background: var(--emerald-800);
   color: #ffffff;
   box-shadow: 0 2px 6px rgba(2, 44, 34, 0.2);
+}
+
+.dash-business-switcher {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 3px;
+  gap: 2px;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(169, 226, 196, .3);
+  border-radius: 8px;
+}
+.dash-business-btn {
+  height: 30px;
+  padding: 0 11px;
+  color: #d3f1e1;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: .71rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dash-business-btn:hover,
+.dash-business-btn.active {
+  color: #084f3b;
+  background: #d3f1e1;
+}
+.dash-business-btn:focus-visible {
+  outline: 3px solid rgba(211, 241, 225, .35);
+  outline-offset: 1px;
 }
 
 .dash-uploads-drawer {
@@ -6380,6 +6415,13 @@ body.template-light .primary-tab.active {
 
 /* Compact connected-user presentation for the narrower sidebar. */
 @media screen and (min-width: 1181px) {
+  .brand-logo-row { width: 100%; gap: 8px; }
+  .brand-logo-row .greenstar-brand { width: auto; height: 62px; flex: 1 1 auto; }
+  .brand-logo-row .ikon-brand { width: 78px; height: 62px; flex: 0 0 78px; border-radius: 9px; }
+  .brand-logo-row .ikon-brand img { object-position: center; }
+  .sidebar-collapsed .brand-logo-row { justify-content: center; }
+  .sidebar-collapsed .brand-logo-row .greenstar-brand { width: 48px; height: 48px; flex: 0 0 48px; }
+  .sidebar-collapsed .ikon-brand { display: none; }
   body:not(.sidebar-collapsed) .greenstar-brand {
     height: 62px;
     flex-basis: 62px;
@@ -6482,6 +6524,20 @@ body.template-light .primary-tab.active {
     inset: 196px auto 90px 0;
   }
 }
+
+@media screen and (max-width: 760px) {
+  .brand-logo-row { gap: 6px; }
+  .ikon-brand { width: 58px; height: 38px; flex-basis: 58px; border-radius: 6px; }
+}
+
+@media screen and (max-width: 560px) {
+  .ikon-brand { display: none; }
+  #attendance-page .dash-business-switcher {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  #attendance-page .dash-business-btn { flex: 1 1 0; }
+}
 .dash-bar-tooltip {
   position: fixed;
   z-index: 2000;
@@ -6501,7 +6557,15 @@ body.template-light .primary-tab.active {
 }
 .dash-bar-tooltip.is-visible { display: block; }
 
-/* Employee filter is single-choice; hide its bulk-select control. */
-#attendance-page .dash-emp-filter-field .excel-multiselect-all {
+/* Employee filter is single-choice; remove multi-select checkbox controls. */
+#attendance-page .dash-emp-filter-field .excel-multiselect-all,
+#attendance-page .dash-emp-filter-field .excel-multiselect-option input {
   display: none;
+}
+#attendance-page .dash-emp-filter-field .excel-multiselect-option {
+  padding-inline: 12px;
+}
+#attendance-page .dash-emp-filter-field .excel-multiselect-option:has(input:checked) {
+  color: var(--greenstar-dark);
+  background: var(--color-primary-soft);
 }

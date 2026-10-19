@@ -13,10 +13,15 @@
   <body>
     <header class="topbar">
       <div class="header-identity">
-        <span class="greenstar-brand" title="Greenstar" aria-label="Greenstar">
-          <img class="greenstar-full-logo" src="/greenstar%20green.jpg" alt="Greenstar" />
-          <img class="greenstar-short-logo" src="/greenstar%20short.jfif" alt="Greenstar" />
-        </span>
+        <div class="brand-logo-row">
+          <span class="greenstar-brand" title="Greenstar" aria-label="Greenstar">
+            <img class="greenstar-full-logo" src="/greenstar%20green.jpg" alt="Greenstar" />
+            <img class="greenstar-short-logo" src="/greenstar%20short.jfif" alt="Greenstar" />
+          </span>
+          <span class="ikon-brand" title="IKON" aria-label="IKON">
+            <img src="/ikon-logo.png" alt="IKON" />
+          </span>
+        </div>
       </div>
       <div class="workspace-meta">
         <span class="workspace-icon" aria-hidden="true">
@@ -44,10 +49,15 @@
       <section id="attendance-page" class="page-panel">
         <div class="page-heading fmcg-page-heading dash-hero-heading">
           <div>
-            <p class="eyebrow">EXECUTIVE ANALYTICS · CALL_ATTENDENCE &amp; LIVE_CALL_DETAILS</p>
+            <p class="eyebrow">EXECUTIVE ANALYTICS · DAILY CALL ATTENDANCE &amp; MOBILE LIVE CALL SUMMARY</p>
             <h1>IKON Call Performance System <span id="dash-heading-date">Latest Available</span></h1>
           </div>
           <div class="dash-header-controls">
+            <div class="dash-business-switcher" role="tablist" aria-label="Business Unit">
+              <button type="button" class="dash-business-btn active" data-business-unit="combined" role="tab" aria-selected="true">Combined</button>
+              <button type="button" class="dash-business-btn" data-business-unit="fmcg" role="tab" aria-selected="false">FMCG</button>
+              <button type="button" class="dash-business-btn" data-business-unit="pharma" role="tab" aria-selected="false">Pharma</button>
+            </div>
             <div class="dash-period-switcher" role="tablist" aria-label="Performance Period">
               <button type="button" class="dash-period-btn active" data-dash-period="mtd" role="tab" aria-selected="true">MTD</button>
               <button type="button" class="dash-period-btn" data-dash-period="ytd" role="tab" aria-selected="false">YTD</button>
@@ -73,20 +83,20 @@
           <div class="dash-uploads-grid">
             <section class="card attendance-summary-card">
               <div class="section-title">
-                <div><h2 class="mobile-live-call-summary-title">Mobile Live Call Summary</h2><p>Upload daily or multi-day call data. Call Nature is calculated automatically and new rows are saved to live_call_details.</p></div>
+                <div><h2 class="mobile-live-call-summary-title">Mobile Live Call Summary</h2><p>Upload daily or multi-day call data. Call Nature is calculated automatically and new rows are saved to Mobile Live Call Summary.</p></div>
                 <span class="file-type">CSV / XLSX / XLS</span>
               </div>
               <label id="attendance-drop-zone" class="drop-zone attendance-drop-zone" for="attendance-file-input">
                 <input id="attendance-file-input" type="file" accept=".csv,.xlsx,.xls" hidden />
                 <span class="upload-icon" aria-hidden="true">↑</span>
-                <span><strong>Choose Mobile Live Calls File</strong><small>CSV or Excel · Header can start on row 2 or later · Max 200 MB</small></span>
+                <span><strong>Choose Mobile Live Call Summary File</strong><small>CSV or Excel · Header can start on row 2 or later · Max 200 MB</small></span>
               </label>
               <p id="attendance-status" class="attendance-status" role="status"></p>
             </section>
 
             <section id="fmcg-mobile-live-call-card" class="card attendance-summary-card">
               <div class="section-title">
-                <div><h2 class="mobile-live-call-summary-title">Daily Call Attendance</h2><p>Upload a CSV or Excel file to add new rows to call_attendence automatically. Duplicate files and duplicate rows are skipped.</p></div>
+                <div><h2 class="mobile-live-call-summary-title">Daily Call Attendance</h2><p>Upload a CSV or Excel file to add new rows to Daily Call Attendance automatically. Duplicate files and duplicate rows are skipped.</p></div>
                 <span class="file-type">CSV / XLSX / XLS</span>
               </div>
               <label id="fmcg-mobile-live-call-drop-zone" class="drop-zone attendance-drop-zone" for="fmcg-mobile-live-call-file-input">
@@ -100,7 +110,7 @@
 
           <section id="attendance-data-card" class="card attendance-data-card hidden">
             <div class="section-title records-title">
-              <div><p class="step">UPLOADED DATA</p><h2 id="attendance-filename">Mobile Live Calls Summary</h2><p>Current uploaded records.</p></div>
+              <div><p class="step">UPLOADED DATA</p><h2 id="attendance-filename">Mobile Live Call Summary</h2><p>Current uploaded records.</p></div>
               <div class="record-count"><strong id="attendance-record-count">0</strong><span>TOTAL ROWS</span></div>
             </div>
             <section id="call-nature-results" class="call-nature-results hidden">
@@ -415,13 +425,13 @@
           <div class="dash-db-tables-header">
             <div>
               <p class="eyebrow">INTERACTIVE SOURCE TABLES · POSTGRESQL</p>
-              <h2>Interactive Database Tables (<code>call_attendence</code> &amp; <code>live_call_details</code>)</h2>
+              <h2>Interactive Database Tables (Daily Call Attendance &amp; Mobile Live Call Summary)</h2>
             </div>
             <div class="dash-mini-tabs" id="dash-db-table-switcher">
               <button type="button" class="dash-mini-tab active" data-db-view="split">Side-by-Side (Left &amp; Right)</button>
               <button type="button" class="dash-mini-tab" data-db-view="both">Stacked Full Width</button>
-              <button type="button" class="dash-mini-tab" data-db-view="ca">call_attendence Only</button>
-              <button type="button" class="dash-mini-tab" data-db-view="lcd">live_call_details Only</button>
+              <button type="button" class="dash-mini-tab" data-db-view="ca">Daily Call Attendance Only</button>
+              <button type="button" class="dash-mini-tab" data-db-view="lcd">Mobile Live Call Summary Only</button>
             </div>
           </div>
 
@@ -429,7 +439,7 @@
             <!-- Interactive Table 1: public.call_attendence -->
             <section class="card fmcg-summary-card" id="dash-ca-card">
             <div class="dash-table-kpi-strip" id="dash-ca-summary-strip">
-              <div class="dash-strip-item"><small>TABLE</small><strong>public.call_attendence</strong></div>
+              <div class="dash-strip-item"><small>TABLE</small><strong>Daily Call Attendance</strong></div>
               <div class="dash-strip-item"><small>MATCHING ROWS</small><strong id="ca-sum-rows">0</strong></div>
               <div class="dash-strip-item"><small>CALL DONE SUM</small><strong id="ca-sum-calls">0</strong></div>
               <div class="dash-strip-item"><small>EXCEPTION DONE SUM</small><strong id="ca-sum-exc">0</strong></div>
@@ -439,7 +449,7 @@
 
             <div class="fmcg-toolbar dash-table-toolbar">
               <label class="fmcg-search-field">
-                <span>Search call_attendence</span>
+                <span>Search Daily Call Attendance</span>
                 <input id="ca-table-search" type="search" placeholder="Search by FF.Id, FF.Name, Team, Manager, Base Town, Call Date…" autocomplete="off" />
               </label>
               <label class="fmcg-filter-field">
@@ -467,7 +477,7 @@
             <div class="fmcg-report-sheet" id="dash-ca-sheet">
               <div class="fmcg-sheet-banner">
                 <div class="fmcg-banner-titles">
-                  <strong>public.call_attendence — Interactive Call &amp; Attendance Table</strong>
+                  <strong>Daily Call Attendance — Interactive Table</strong>
                   <span class="fmcg-banner-sub">Columns: team, ff_id, ff_name, manager, base_town, call_date, call_type, total_sum_of_done, total_distinct_count_of_ff_id</span>
                 </div>
                 <div class="fmcg-banner-actions">
@@ -494,7 +504,7 @@
                     </tr>
                   </thead>
                   <tbody id="ca-table-tbody">
-                    <tr><td colspan="9" class="fmcg-state-cell">Loading public.call_attendence records…</td></tr>
+                    <tr><td colspan="9" class="fmcg-state-cell">Loading Daily Call Attendance records…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -519,7 +529,7 @@
           <!-- Interactive Table 2: public.live_call_details -->
           <section class="card fmcg-summary-card" id="dash-lcd-card">
             <div class="dash-table-kpi-strip" id="dash-lcd-summary-strip">
-              <div class="dash-strip-item"><small>TABLE</small><strong>public.live_call_details</strong></div>
+              <div class="dash-strip-item"><small>TABLE</small><strong>Mobile Live Call Summary</strong></div>
               <div class="dash-strip-item"><small>MATCHING ROWS</small><strong id="lcd-sum-rows">0</strong></div>
               <div class="dash-strip-item"><small>PROVIDER CALLS</small><strong id="lcd-sum-provider">0</strong></div>
               <div class="dash-strip-item"><small>ATTENDANCE ROWS</small><strong id="lcd-sum-att">0</strong></div>
@@ -531,7 +541,7 @@
 
             <div class="fmcg-toolbar dash-table-toolbar dash-lcd-toolbar">
               <label class="fmcg-search-field">
-                <span>Search live_call_details</span>
+                <span>Search Mobile Live Call Summary</span>
                 <input id="lcd-table-search" type="search" placeholder="Search by FF.Id, FF.Name, Doctorname, PMDC, Manager, Town…" autocomplete="off" />
               </label>
               <label class="fmcg-filter-field">
@@ -563,7 +573,7 @@
             <div class="fmcg-report-sheet" id="dash-lcd-sheet">
               <div class="fmcg-sheet-banner">
                 <div class="fmcg-banner-titles">
-                  <strong>public.live_call_details — Interactive Live Call Details Table</strong>
+                  <strong>Mobile Live Call Summary — Interactive Table</strong>
                   <span class="fmcg-banner-sub">Columns: team, ff_id, ff_name, call_date, manager, base_town, pmdc, doctorname, call_nature, calltype, ww, lng, lat, total_sum_noofcalls, total_sum_noofproducts, geometer_range</span>
                 </div>
                 <div class="fmcg-banner-actions">
@@ -597,7 +607,7 @@
                     </tr>
                   </thead>
                   <tbody id="lcd-table-tbody">
-                    <tr><td colspan="16" class="fmcg-state-cell">Loading public.live_call_details records…</td></tr>
+                    <tr><td colspan="16" class="fmcg-state-cell">Loading Mobile Live Call Summary records…</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -678,7 +688,7 @@
 
           <div id="fmcg-status-bar" class="fmcg-status-bar" role="status">
             <span id="fmcg-status-text">Loading FMCG summary records…</span>
-            <span id="fmcg-metrics-note" class="fmcg-metrics-note">Call and attendance metrics use EXCEPTION and CALL rows with DONE &gt; 0 from the shared call_attendence table.</span>
+            <span id="fmcg-metrics-note" class="fmcg-metrics-note">Call and attendance metrics use EXCEPTION and CALL rows with DONE &gt; 0 from Daily Call Attendance.</span>
           </div>
 
           <div class="fmcg-report-sheet" id="fmcg-report-sheet">
@@ -885,7 +895,7 @@
 
           <div id="pharma-status-bar" class="fmcg-status-bar" role="status">
             <span id="pharma-status-text">Loading PHARMA summary records…</span>
-            <span id="pharma-metrics-note" class="fmcg-metrics-note">Call and attendance metrics use EXCEPTION and CALL rows with DONE &gt; 0 from the shared call_attendence table.</span>
+            <span id="pharma-metrics-note" class="fmcg-metrics-note">Call and attendance metrics use EXCEPTION and CALL rows with DONE &gt; 0 from Daily Call Attendance.</span>
           </div>
 
           <div class="fmcg-report-sheet" id="pharma-report-sheet">

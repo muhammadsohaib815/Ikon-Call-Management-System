@@ -203,12 +203,12 @@ async function uploadAttendanceSummary(file) {
   if (!file) return;
   const extension = file.name.toLowerCase().split(".").pop();
   if (!["csv", "xlsx", "xls"].includes(extension)) {
-    attendanceStatus("Unable to process file. Please check the Mobile Live Calls Summary format and required columns.", true);
+    attendanceStatus("Unable to process file. Please check the Mobile Live Call Summary format and required columns.", true);
     return;
   }
   const formData = new FormData();
   formData.append("file", file);
-  attendanceStatus("Processing Call Nature and saving rows to live_call_details…");
+  attendanceStatus("Processing Call Nature and saving rows to Mobile Live Call Summary…");
   try {
     const response = await api("/api/attendance/mobile-live-call-summary", { method: "POST", body: formData });
     const result = await response.json();
@@ -259,7 +259,7 @@ async function uploadAttendanceSummary(file) {
       loadLiveCallDetailsInteractiveTable();
     }
   } catch (error) {
-    attendanceStatus(error.message || "Unable to process file. Please check the Mobile Live Calls Summary format and required columns.", true);
+    attendanceStatus(error.message || "Unable to process file. Please check the Mobile Live Call Summary format and required columns.", true);
   } finally {
     elements.attendanceInput.value = "";
   }
@@ -276,10 +276,10 @@ async function loadAttendancePage(offset) {
     const firstRow = result.rows.length ? result.offset + 1 : 0;
     const lastRow = result.offset + result.rows.length;
     attendanceStatus(
-      `Mobile Live Calls Summary: Showing rows ${firstRow.toLocaleString()}–${lastRow.toLocaleString()} of ${result.total.toLocaleString()} total rows. Upload another file to compare call activity and attendance records.`
+      `Mobile Live Call Summary: Showing rows ${firstRow.toLocaleString()}–${lastRow.toLocaleString()} of ${result.total.toLocaleString()} total rows. Upload another file to compare call activity and attendance records.`
     );
   } catch (error) {
-    attendanceStatus(error.message || "Unable to process file. Please check the Mobile Live Calls Summary format and required columns.", true);
+    attendanceStatus(error.message || "Unable to process file. Please check the Mobile Live Call Summary format and required columns.", true);
   }
 }
 
@@ -310,28 +310,28 @@ async function uploadFmcgMobileLiveCallSummary(file) {
   if (!file) return;
   const extension = file.name.toLowerCase().split(".").pop();
   if (!["csv", "xlsx", "xls"].includes(extension)) {
-    fmcgMobileLiveCallStatus("Choose a valid CSV, XLSX, or XLS file for the Mobile Live Call Attendence.", true);
+    fmcgMobileLiveCallStatus("Choose a valid CSV, XLSX, or XLS file for Daily Call Attendance.", true);
     return;
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    fmcgMobileLiveCallStatus("The Mobile Live Call Attendence file exceeds the 200 MB upload limit.", true);
+    fmcgMobileLiveCallStatus("The Daily Call Attendance file exceeds the 200 MB upload limit.", true);
     return;
   }
   const formData = new FormData();
   formData.append("file", file);
-  fmcgMobileLiveCallStatus("Uploading Mobile Live Call Attendence…");
+  fmcgMobileLiveCallStatus("Uploading Daily Call Attendance…");
   try {
     const response = await api("/api/attendance/fmcg-mobile-live-call-summary", { method: "POST", body: formData });
     const result = await response.json();
     state.fmcgMobileLiveCall = { id: result.id, filename: result.filename, size: result.size };
-    fmcgMobileLiveCallStatus(result.message || `${result.filename} uploaded to call_attendence.`);
+    fmcgMobileLiveCallStatus(result.message || `${result.filename} uploaded to Daily Call Attendance.`);
     if (typeof loadDashboardAnalytics === "function") {
       dashState.filtersPopulated = false;
       loadDashboardAnalytics();
       loadCallAttendenceInteractiveTable();
     }
   } catch (error) {
-    fmcgMobileLiveCallStatus(error.message || "Unable to upload the Mobile Live Call Attendence file.", true);
+    fmcgMobileLiveCallStatus(error.message || "Unable to upload the Daily Call Attendance file.", true);
   } finally {
     elements.fmcgMobileLiveCallInput.value = "";
   }
@@ -423,10 +423,12 @@ function splitMultiFilterValue(value) {
   return String(value || "").split(MULTI_FILTER_SEPARATOR).map((item) => item.trim()).filter(Boolean);
 }
 
-function createExcelMultiSelect(source, defaultLabel, onApply) {
+function createExcelMultiSelect(source, defaultLabel, onApply, config = {}) {
+  const singleSelect = Boolean(config.singleSelect);
   const state = { items: [], active: new Set(), draft: new Set(), open: false };
   const host = document.createElement("div");
   host.className = "excel-multiselect";
+  host.classList.toggle("is-single-select", singleSelect);
   host.innerHTML = `
     <button type="button" class="excel-multiselect-trigger" aria-haspopup="listbox" aria-expanded="false">
       <span class="excel-multiselect-label"></span><span class="excel-multiselect-arrow" aria-hidden="true">▾</span>
@@ -434,7 +436,7 @@ function createExcelMultiSelect(source, defaultLabel, onApply) {
     <div class="excel-multiselect-menu" role="dialog" aria-label="${escapeHtml(defaultLabel)} filter">
       <label class="excel-multiselect-search"><input type="search" autocomplete="off" aria-label="Search ${escapeHtml(defaultLabel)}" placeholder="Search..." /></label>
       <label class="excel-multiselect-all"><input type="checkbox" /> <span>Select all search results</span></label>
-      <div class="excel-multiselect-options" role="listbox" aria-multiselectable="true"></div>
+      <div class="excel-multiselect-options" role="listbox" aria-multiselectable="${singleSelect ? "false" : "true"}"></div>
       <div class="excel-multiselect-actions">
         <button type="button" class="excel-multiselect-clear">Clear</button>
         <button type="button" class="excel-multiselect-apply">Apply</button>
@@ -507,9 +509,13 @@ function createExcelMultiSelect(source, defaultLabel, onApply) {
   options.addEventListener("change", (event) => {
     const checkbox = event.target.closest("input[type=checkbox]");
     if (!checkbox) return;
-    if (checkbox.checked) state.draft.add(checkbox.value);
+    if (checkbox.checked) {
+      if (singleSelect) state.draft.clear();
+      state.draft.add(checkbox.value);
+    }
     else state.draft.delete(checkbox.value);
-    refreshSelectAll();
+    if (singleSelect) renderOptions();
+    else refreshSelectAll();
   });
   selectAll.addEventListener("change", () => {
     const visibleItems = matchingItems();
@@ -1181,7 +1187,7 @@ function createTeamIkonMtdSummary({
   async function loadSummary() {
     teamState.loading = true;
     dom.statusBar.classList.remove("error");
-    dom.statusText.textContent = `Loading ${teamLabel} summary records from staff master and the shared call_attendence table…`;
+    dom.statusText.textContent = `Loading ${teamLabel} summary records from staff master and Daily Call Attendance…`;
     const days = getDaysInMonthFromIso(teamState.reportDate);
     updateTitles(formatDisplayDate(teamState.reportDate), formatMonthLabel(teamState.reportDate), days);
     renderColumnHeaders(days);
@@ -2282,6 +2288,7 @@ const dashState = {
   loaded: false,
   filtersPopulated: false,
   period: "mtd", // "mtd" | "ytd"
+  businessUnit: "combined", // "combined" | "fmcg" | "pharma"
   trendMode: "daily", // "daily" | "weekly" | "monthly"
   lineMetric: "calls_vs_att",
   empBarMetric: "period_comparison",
@@ -2341,6 +2348,7 @@ const dashState = {
 const dashDom = {
   headingDate: $("#dash-heading-date"),
   periodBtns: $$(".dash-period-btn"),
+  businessUnitBtns: $$(".dash-business-btn"),
   reportDateInput: $("#dash-report-date"),
   refreshBtn: $("#dash-refresh-btn"),
   filterToggleBtn: $("#dash-filter-toggle-btn"),
@@ -2518,7 +2526,7 @@ const dashMultiFilters = {
     dashState.empBarPage = 0;
     dashState.matrixPage = 1;
     loadDashboardAnalytics();
-  }) : null,
+  }, { singleSelect: true }) : null,
   team: dashDom.teamFilter ? createExcelMultiSelect(dashDom.teamFilter, "All Teams", (val) => {
     dashState.team = val;
     dashState.empBarPage = 0;
@@ -2728,8 +2736,8 @@ function renderDashboardLineChart() {
   let seriesDefs = [];
   if (metricMode === "lcd_vs_products") {
     seriesDefs = [
-      { key: "lcdProviderCalls", label: "Provider Calls (live_call_details)", color: "#4f46e5" },
-      { key: "lcdProducts", label: "Products Detailed (live_call_details)", color: "#7c3aed" },
+      { key: "lcdProviderCalls", label: "Provider Calls (Mobile Live Call Summary)", color: "#4f46e5" },
+      { key: "lcdProducts", label: "Products Detailed (Mobile Live Call Summary)", color: "#7c3aed" },
     ];
   } else if (metricMode === "avg_calls") {
     seriesDefs = [
@@ -2743,9 +2751,9 @@ function renderDashboardLineChart() {
     ];
   } else {
     seriesDefs = [
-      { key: "callsDone", label: "Calls Done (call_attendence)", color: "#059669" },
+      { key: "callsDone", label: "Calls Done (Daily Call Attendance)", color: "#059669" },
       { key: "attendanceCount", label: "Attendance Marked", color: "#d97706" },
-      { key: "lcdProviderCalls", label: "Provider Calls (live_call_details)", color: "#2563eb" },
+      { key: "lcdProviderCalls", label: "Provider Calls (Mobile Live Call Summary)", color: "#2563eb" },
     ];
   }
 
@@ -2967,7 +2975,7 @@ function renderEmployeeBarChart() {
       ytdCalls: ["YTD Calls Done", "#0d9488"],
       weeklyCalls: ["Weekly Calls Done", "#d97706"],
       dailyCalls: ["Daily Calls Done", "#2563eb"],
-      monthlyLcdCalls: ["Provider Calls (live_call_details)", "#4f46e5"],
+      monthlyLcdCalls: ["Provider Calls (Mobile Live Call Summary)", "#4f46e5"],
       monthlyProducts: ["Products Detailed", "#7c3aed"],
       monthlyAttDays: ["Monthly Attendance Days", "#0d9488"],
       monthlyAvgCalls: ["Monthly Avg Calls / Day", "#0891b2"],
@@ -3303,6 +3311,7 @@ async function loadDashboardAnalytics() {
   dashDom.statusBar?.classList.remove("error");
 
   const params = new URLSearchParams();
+  params.set("business_unit", dashState.businessUnit);
   if (dashState.reportDate) params.set("report_date", dashState.reportDate);
   if (dashState.team) params.set("team", dashState.team);
   if (dashState.manager) params.set("manager", dashState.manager);
@@ -3382,6 +3391,7 @@ function buildCaTableParams() {
   const p = new URLSearchParams();
   p.set("page", String(s.page));
   p.set("page_size", String(s.pageSize));
+  p.set("business_unit", dashState.businessUnit);
   if (s.search.trim()) p.set("search", s.search.trim());
   if (s.team) p.set("team", s.team);
   if (s.callType) p.set("call_type", s.callType);
@@ -3428,7 +3438,7 @@ async function loadCallAttendenceInteractiveTable() {
     });
 
     if (!s.rows.length) {
-      dashDom.caBody.innerHTML = '<tr><td colspan="9" class="fmcg-state-cell">No records in public.call_attendence matched the current filters.</td></tr>';
+      dashDom.caBody.innerHTML = '<tr><td colspan="9" class="fmcg-state-cell">No Daily Call Attendance records matched the current filters.</td></tr>';
     } else {
       dashDom.caBody.innerHTML = s.rows.map((r) => `<tr>
         <td>${escapeHtml(r.call_date)}</td>
@@ -3452,7 +3462,7 @@ async function loadCallAttendenceInteractiveTable() {
     dashDom.caLast.disabled = s.page >= s.totalPages;
     renderSimplePageNums(dashDom.caPageNums, s.page, s.totalPages);
   } catch (error) {
-    dashDom.caBody.innerHTML = `<tr><td colspan="9" class="fmcg-state-cell">${escapeHtml(error.message || "Unable to load public.call_attendence")}</td></tr>`;
+    dashDom.caBody.innerHTML = `<tr><td colspan="9" class="fmcg-state-cell">${escapeHtml(error.message || "Unable to load Daily Call Attendance")}</td></tr>`;
   }
 }
 
@@ -3464,6 +3474,7 @@ function buildLcdTableParams() {
   const p = new URLSearchParams();
   p.set("page", String(s.page));
   p.set("page_size", String(s.pageSize));
+  p.set("business_unit", dashState.businessUnit);
   if (s.search.trim()) p.set("search", s.search.trim());
   if (s.team) p.set("team", s.team);
   if (s.callNature) p.set("call_nature", s.callNature);
@@ -3503,7 +3514,7 @@ async function loadLiveCallDetailsInteractiveTable() {
     });
 
     if (!s.rows.length) {
-      dashDom.lcdBody.innerHTML = '<tr><td colspan="16" class="fmcg-state-cell">No records in public.live_call_details matched the current filters.</td></tr>';
+      dashDom.lcdBody.innerHTML = '<tr><td colspan="16" class="fmcg-state-cell">No Mobile Live Call Summary records matched the current filters.</td></tr>';
     } else {
       dashDom.lcdBody.innerHTML = s.rows.map((r) => `<tr>
         <td>${escapeHtml(r.call_date)}</td>
@@ -3534,7 +3545,7 @@ async function loadLiveCallDetailsInteractiveTable() {
     dashDom.lcdLast.disabled = s.page >= s.totalPages;
     renderSimplePageNums(dashDom.lcdPageNums, s.page, s.totalPages);
   } catch (error) {
-    dashDom.lcdBody.innerHTML = `<tr><td colspan="16" class="fmcg-state-cell">${escapeHtml(error.message || "Unable to load public.live_call_details")}</td></tr>`;
+    dashDom.lcdBody.innerHTML = `<tr><td colspan="16" class="fmcg-state-cell">${escapeHtml(error.message || "Unable to load Mobile Live Call Summary")}</td></tr>`;
   }
 }
 
@@ -3550,6 +3561,42 @@ dashDom.periodBtns.forEach((btn) => {
       b.setAttribute("aria-selected", String(active));
     });
     renderAllDashboardViews();
+  });
+});
+
+dashDom.businessUnitBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const businessUnit = btn.dataset.businessUnit || "combined";
+    if (businessUnit === dashState.businessUnit && dashState.loaded) return;
+    dashState.businessUnit = businessUnit;
+    dashState.filtersPopulated = false;
+    dashState.team = "";
+    dashState.manager = "";
+    dashState.baseTown = "";
+    dashState.employee = "";
+    dashState.focusedEmployeeKey = "";
+    dashState.ca.team = "";
+    dashState.ca.page = 1;
+    dashState.lcd.team = "";
+    dashState.lcd.page = 1;
+    dashState.empBarPage = 0;
+    dashState.matrixPage = 1;
+    dashMultiFilters.team?.setValue("");
+    dashMultiFilters.manager?.setValue("");
+    dashMultiFilters.baseTown?.setValue("");
+    dashMultiFilters.employee?.setValue("");
+    dashDom.activeEmpPill?.classList.add("hidden");
+    if (dashDom.activeEmpPill) dashDom.activeEmpPill.innerHTML = "";
+    if (dashDom.caTeam) dashDom.caTeam.value = "";
+    if (dashDom.lcdTeam) dashDom.lcdTeam.value = "";
+    dashDom.businessUnitBtns.forEach((businessBtn) => {
+      const active = businessBtn === btn;
+      businessBtn.classList.toggle("active", active);
+      businessBtn.setAttribute("aria-selected", String(active));
+    });
+    loadDashboardAnalytics();
+    loadCallAttendenceInteractiveTable();
+    loadLiveCallDetailsInteractiveTable();
   });
 });
 
@@ -3619,6 +3666,8 @@ dashDom.reportDateInput?.addEventListener("change", () => {
 });
 
 dashDom.resetBtn?.addEventListener("click", () => {
+  dashState.businessUnit = "combined";
+  dashState.filtersPopulated = false;
   dashState.team = "";
   dashState.manager = "";
   dashState.baseTown = "";
@@ -3628,6 +3677,11 @@ dashDom.resetBtn?.addEventListener("click", () => {
   dashState.focusedEmployeeKey = "";
   dashState.empBarPage = 0;
   dashState.matrixPage = 1;
+  dashDom.businessUnitBtns.forEach((btn) => {
+    const active = btn.dataset.businessUnit === "combined";
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-selected", String(active));
+  });
   dashMultiFilters.team?.setValue("");
   dashMultiFilters.manager?.setValue("");
   dashMultiFilters.baseTown?.setValue("");
@@ -3641,7 +3695,11 @@ dashDom.resetBtn?.addEventListener("click", () => {
   if (dashDom.callNatureFilter) dashDom.callNatureFilter.value = "";
   dashDom.activeEmpPill?.classList.add("hidden");
   if (dashDom.activeEmpPill) dashDom.activeEmpPill.innerHTML = "";
+  dashState.ca.page = 1;
+  dashState.lcd.page = 1;
   loadDashboardAnalytics();
+  loadCallAttendenceInteractiveTable();
+  loadLiveCallDetailsInteractiveTable();
 });
 
 // Employee Matrix events

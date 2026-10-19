@@ -1117,7 +1117,7 @@ def read_call_attendence_frame(content: bytes, extension: str) -> pd.DataFrame:
                 content,
                 canonical_by_key,
                 len(CALL_ATTENDENCE_FILE_COLUMNS),
-                "The file header does not match the nine required call_attendence columns.",
+                "The file header does not match the nine required Daily Call Attendance columns.",
             )
     except ValueError:
         raise
@@ -1134,7 +1134,7 @@ def read_call_attendence_frame(content: bytes, extension: str) -> pd.DataFrame:
 
     if best_match_count != len(CALL_ATTENDENCE_FILE_COLUMNS):
         raise ValueError(
-            "The file header does not match the nine required call_attendence columns."
+            "The file header does not match the nine required Daily Call Attendance columns."
         )
 
     return pd.read_csv(
@@ -1172,7 +1172,7 @@ def clean_call_attendence_frame(frame: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(f"The file is missing required column(s): {', '.join(missing)}.")
     if unsupported:
         raise ValueError(
-            f"The file contains column(s) not present in call_attendence: {', '.join(unsupported)}."
+            f"The file contains column(s) not present in Daily Call Attendance: {', '.join(unsupported)}."
         )
 
     cleaned = frame[list(renamed)].rename(columns=renamed)
@@ -1199,7 +1199,7 @@ def prepare_call_attendence_rows(
     ]
     if missing_database_columns:
         raise ValueError(
-            "Database table public.call_attendence is missing column(s): "
+            "Daily Call Attendance is missing column(s): "
             + ", ".join(missing_database_columns)
             + "."
         )
@@ -1237,7 +1237,7 @@ def store_call_attendence_upload(
     with get_database_engine().begin() as connection:
         schema = _mobile_live_call_schema(connection, "call_attendence")
         if not schema:
-            raise ValueError("Database table public.call_attendence was not found.")
+            raise ValueError("Daily Call Attendance was not found.")
         prepared_rows, duplicate_in_file = prepare_call_attendence_rows(frame, schema)
 
         connection.execute(text(f"""
@@ -1270,7 +1270,7 @@ def store_call_attendence_upload(
                 status_code=409,
                 content={
                     "status": "already_uploaded",
-                    "message": "File Already Uploaded: no rows were added to call_attendence.",
+                    "message": "File Already Uploaded: no rows were added to Daily Call Attendance.",
                     "insertedRows": 0,
                     "skippedRows": len(frame),
                     "totalRows": len(frame),
@@ -1334,7 +1334,7 @@ def store_call_attendence_upload(
         "status": "success",
         "filename": Path(filename).name,
         "message": (
-            f"Upload complete: {inserted_rows:,} new row(s) inserted into call_attendence; "
+            f"Upload complete: {inserted_rows:,} new row(s) inserted into Daily Call Attendance; "
             f"{skipped_rows:,} duplicate row(s) skipped."
         ),
         "insertedRows": inserted_rows,
@@ -1351,15 +1351,15 @@ async def upload_fmcg_mobile_live_call_summary(file: UploadFile = File(...)) -> 
     if extension not in {".csv", ".xlsx", ".xls"}:
         raise HTTPException(
             status_code=400,
-            detail="Choose a valid CSV, XLSX, or XLS file for the Mobile Live Call Attendence.",
+            detail="Choose a valid CSV, XLSX, or XLS file for Daily Call Attendance.",
         )
 
     content = await file.read(MAX_UPLOAD_BYTES + 1)
     await file.close()
     if not content:
-        raise HTTPException(status_code=400, detail="The Mobile Live Call Attendence file is empty.")
+        raise HTTPException(status_code=400, detail="The Daily Call Attendance file is empty.")
     if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="The Mobile Live Call Attendence file exceeds the 200 MB upload limit.")
+        raise HTTPException(status_code=413, detail="The Daily Call Attendance file exceeds the 200 MB upload limit.")
 
     if extension == ".xlsx":
         try:
@@ -1367,7 +1367,7 @@ async def upload_fmcg_mobile_live_call_summary(file: UploadFile = File(...)) -> 
                 if "[Content_Types].xml" not in archive.namelist():
                     raise ValueError("missing XLSX content types")
         except (BadZipFile, ValueError) as error:
-            raise HTTPException(status_code=400, detail="The Mobile Live Call Attendence XLSX file is not valid.") from error
+            raise HTTPException(status_code=400, detail="The Daily Call Attendance XLSX file is not valid.") from error
 
     try:
         return store_call_attendence_upload(content, filename, extension)
@@ -1862,7 +1862,7 @@ def store_mobile_live_call_details(
             schema = _mobile_live_call_schema(connection, MOBILE_LIVE_CALL_TARGET_TABLE)
             if not schema:
                 raise ValueError(
-                    f"Database table public.{MOBILE_LIVE_CALL_TARGET_TABLE} was not found or has no columns."
+                    "Mobile Live Call Summary was not found or has no columns."
                 )
 
             prepared_rows, duplicate_rows, value_columns = _prepare_mobile_live_call_rows(
@@ -1889,8 +1889,7 @@ def store_mobile_live_call_details(
                 return {
                     "status": "already_uploaded",
                     "message": (
-                        "File Already Uploaded: no rows were added to "
-                        f"public.{MOBILE_LIVE_CALL_TARGET_TABLE}."
+                        "File Already Uploaded: no rows were added to Mobile Live Call Summary."
                     ),
                     "insertedRows": 0,
                     "skippedRows": len(frame),
@@ -1943,7 +1942,7 @@ def store_mobile_live_call_details(
                 },
             )
     except (SQLAlchemyError, ValueError, TypeError) as error:
-        logger.exception("Mobile Live Calls Summary database upload failed", exc_info=error)
+        logger.exception("Mobile Live Call Summary database upload failed", exc_info=error)
         raise HTTPException(
             status_code=400,
             detail=(
@@ -1956,7 +1955,7 @@ def store_mobile_live_call_details(
         "status": "success",
         "message": (
             f"Database upload complete: {inserted_rows:,} row(s) inserted into "
-            f"public.{MOBILE_LIVE_CALL_TARGET_TABLE}; {skipped_rows:,} duplicate row(s) skipped."
+            f"Mobile Live Call Summary; {skipped_rows:,} duplicate row(s) skipped."
         ),
         "insertedRows": inserted_rows,
         "skippedRows": skipped_rows,
@@ -3431,12 +3430,12 @@ LIVE_CALL_SOURCE_CONFIGS: dict[str, dict[str, str]] = {
     "FMCG": {
         "team_key": "FMCG",
         "table": "call_attendence",
-        "label": "FMCG call attendance",
+        "label": "FMCG Daily Call Attendance",
     },
     "PHARMA": {
         "team_key": "PHARMA",
         "table": "call_attendence",
-        "label": "PHARMA call attendance",
+        "label": "PHARMA Daily Call Attendance",
     },
 }
 
@@ -4813,6 +4812,41 @@ def _parse_iso_date_optional(value: str | None, param_name: str = "date") -> dat
         ) from error
 
 
+def _normalize_dashboard_business_unit(value: str | None) -> str:
+    business_unit = (value or "combined").strip().casefold() or "combined"
+    if business_unit not in {"combined", "fmcg", "pharma"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid business_unit. Expected combined, fmcg, or pharma.",
+        )
+    return business_unit
+
+
+def _team_matches_dashboard_business_unit(team: str, business_unit: str) -> bool:
+    normalized_team = re.sub(r"[^A-Z0-9]", "", str(team or "").upper())
+    if business_unit == "combined":
+        return normalized_team.startswith(("FMCG", "PHARMA"))
+    return normalized_team.startswith(business_unit.upper())
+
+
+def _add_dashboard_business_unit_sql_filter(
+    where_clauses: list[str],
+    params: dict[str, Any],
+    business_unit: str,
+) -> None:
+    team_expression = "REGEXP_REPLACE(UPPER(BTRIM(COALESCE(team, ''))), '[^A-Z0-9]', '', 'g')"
+    if business_unit == "combined":
+        where_clauses.append(
+            f"({team_expression} LIKE :fmcg_business_unit_prefix "
+            f"OR {team_expression} LIKE :pharma_business_unit_prefix)"
+        )
+        params["fmcg_business_unit_prefix"] = "FMCG%"
+        params["pharma_business_unit_prefix"] = "PHARMA%"
+        return
+    where_clauses.append(f"{team_expression} LIKE :business_unit_prefix")
+    params["business_unit_prefix"] = f"{business_unit.upper()}%"
+
+
 def _week_of_month_bucket(target_date: date) -> tuple[str, str, date, date]:
     """Return a clean weekly bucket within the month (Week 1: 1-7, Week 2: 8-14, etc.)."""
     day = target_date.day
@@ -4839,11 +4873,13 @@ def get_dashboard_performance(
     employee: str = "",
     call_type: str = "",
     call_nature: str = "",
+    business_unit: str = "combined",
 ) -> dict[str, Any]:
     """Aggregate KPI cards, charts, and employee MTD/YTD call performance."""
     req_report_date = _parse_iso_date_optional(report_date, "report_date")
     req_date_from = _parse_iso_date_optional(date_from, "date_from")
     req_date_to = _parse_iso_date_optional(date_to, "date_to")
+    business_unit_filter = _normalize_dashboard_business_unit(business_unit)
 
     try:
         with get_database_engine().connect() as connection:
@@ -4885,7 +4921,7 @@ def get_dashboard_performance(
         logger.exception("Dashboard performance query failed", exc_info=error)
         raise HTTPException(
             status_code=503,
-            detail="Unable to load dashboard analytics from call_attendence and live_call_details.",
+            detail="Unable to load dashboard analytics from Daily Call Attendance and Mobile Live Call Summary.",
         ) from error
 
     teams_set: set[str] = set()
@@ -4898,6 +4934,8 @@ def get_dashboard_performance(
     ca_call_dates: list[date] = []
 
     for r in ca_rows:
+        if not _team_matches_dashboard_business_unit(r["team"], business_unit_filter):
+            continue
         dt = r["call_date"]
         if isinstance(dt, datetime):
             dt = dt.date()
@@ -4934,6 +4972,8 @@ def get_dashboard_performance(
 
     lcd_dates: list[date] = []
     for r in lcd_rows:
+        if not _team_matches_dashboard_business_unit(r["team"], business_unit_filter):
+            continue
         dt = r["call_date"]
         if isinstance(dt, datetime):
             dt = dt.date()
@@ -5021,6 +5061,8 @@ def get_dashboard_performance(
             emp_text_queries.append(clean_it)
 
     def matches_common_filters(row_team: str, row_manager: str, row_town: str, row_ff_id: str, row_ff_name: str) -> bool:
+        if not _team_matches_dashboard_business_unit(row_team, business_unit_filter):
+            return False
         if team_filter and row_team.casefold() not in team_filter:
             return False
         if manager_filter and row_manager.casefold() not in manager_filter:
@@ -5909,6 +5951,7 @@ def _query_call_attendence_table(
     date_to: str | None = None,
     sort_by: str = "call_date",
     sort_dir: str = "desc",
+    business_unit: str = "combined",
     export_all: bool = False,
 ) -> dict[str, Any]:
     parsed_from = _parse_iso_date_optional(date_from, "date_from")
@@ -5929,6 +5972,8 @@ def _query_call_attendence_table(
 
     where_clauses: list[str] = ["1=1"]
     params: dict[str, Any] = {}
+    business_unit_filter = _normalize_dashboard_business_unit(business_unit)
+    _add_dashboard_business_unit_sql_filter(where_clauses, params, business_unit_filter)
 
     if team.strip():
         teams = [t.strip().casefold() for t in team.split("|") if t.strip()]
@@ -6108,6 +6153,7 @@ def get_dashboard_call_attendence(
     date_to: str | None = None,
     sort_by: str = "call_date",
     sort_dir: str = "desc",
+    business_unit: str = "combined",
 ) -> dict[str, Any]:
     return _query_call_attendence_table(
         page=page,
@@ -6122,6 +6168,7 @@ def get_dashboard_call_attendence(
         date_to=date_to,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        business_unit=business_unit,
         export_all=False,
     )
 
@@ -6138,6 +6185,7 @@ def export_dashboard_call_attendence(
     date_to: str | None = None,
     sort_by: str = "call_date",
     sort_dir: str = "desc",
+    business_unit: str = "combined",
 ) -> StreamingResponse:
     result = _query_call_attendence_table(
         search=search,
@@ -6150,6 +6198,7 @@ def export_dashboard_call_attendence(
         date_to=date_to,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        business_unit=business_unit,
         export_all=True,
     )
     frame = pd.DataFrame(result["rows"])
@@ -6157,7 +6206,7 @@ def export_dashboard_call_attendence(
     return StreamingResponse(
         BytesIO(csv_bytes),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=call_attendence_export.csv"},
+        headers={"Content-Disposition": "attachment; filename=daily_call_attendance_export.csv"},
     )
 
 
@@ -6176,6 +6225,7 @@ def _query_live_call_details_table(
     date_to: str | None = None,
     sort_by: str = "call_date",
     sort_dir: str = "desc",
+    business_unit: str = "combined",
     export_all: bool = False,
 ) -> dict[str, Any]:
     parsed_from = _parse_iso_date_optional(date_from, "date_from")
@@ -6203,6 +6253,8 @@ def _query_live_call_details_table(
 
     where_clauses: list[str] = ["1=1"]
     params: dict[str, Any] = {}
+    business_unit_filter = _normalize_dashboard_business_unit(business_unit)
+    _add_dashboard_business_unit_sql_filter(where_clauses, params, business_unit_filter)
 
     if team.strip():
         teams = [t.strip().casefold() for t in team.split("|") if t.strip()]
@@ -6418,6 +6470,7 @@ def get_dashboard_live_call_details(
     date_to: str | None = None,
     sort_by: str = "call_date",
     sort_dir: str = "desc",
+    business_unit: str = "combined",
 ) -> dict[str, Any]:
     return _query_live_call_details_table(
         page=page,
@@ -6434,6 +6487,7 @@ def get_dashboard_live_call_details(
         date_to=date_to,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        business_unit=business_unit,
         export_all=False,
     )
 
@@ -6452,6 +6506,7 @@ def export_dashboard_live_call_details(
     date_to: str | None = None,
     sort_by: str = "call_date",
     sort_dir: str = "desc",
+    business_unit: str = "combined",
 ) -> StreamingResponse:
     result = _query_live_call_details_table(
         search=search,
@@ -6466,6 +6521,7 @@ def export_dashboard_live_call_details(
         date_to=date_to,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        business_unit=business_unit,
         export_all=True,
     )
     frame = pd.DataFrame(result["rows"])
@@ -6473,7 +6529,7 @@ def export_dashboard_live_call_details(
     return StreamingResponse(
         BytesIO(csv_bytes),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=live_call_details_export.csv"},
+        headers={"Content-Disposition": "attachment; filename=mobile_live_call_summary_export.csv"},
     )
 
 
