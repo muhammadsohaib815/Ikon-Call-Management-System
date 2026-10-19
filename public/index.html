@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Upload and edit attendance workbooks in the browser." />
+    <title>IKON Call</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="IKON Call home">
+        <span class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-1A3.5 3.5 0 0 0 8 18.5V20M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M16.5 5.15a3 3 0 0 1 0 5.7" /></svg>
+        </span>
+        <span class="brand-copy"><strong>IKON Call</strong></span>
+      </a>
+      <div class="workspace-meta">
+        <span class="workspace-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" role="img"><ellipse cx="12" cy="5" rx="7" ry="3" /><path d="M5 5v6c0 1.66 3.13 3 7 3s7-1.34 7-3V5M5 11v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" /></svg>
+        </span>
+        <span><strong>Local workspace</strong><small>Pharma + FMCG</small></span>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <nav class="primary-tabs" aria-label="Application sections">
+        <button class="primary-tab active" data-page="attendance"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-5M12 16V8M16 16v-8" /></svg></span>Call Performance</button>
+        <button class="primary-tab" data-page="fmcg-ikon-mtd"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-4M12 16V8M16 16v-6" /></svg></span>FMCG MTD Summary</button>
+        <button class="primary-tab" data-page="pharma-ikon-mtd"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 16v-4M12 16V8M16 16v-6" /></svg></span>Pharma MTD Summary</button>
+        <button class="primary-tab" data-page="editor"><span class="tab-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><circle cx="17" cy="8.5" r="2.6" /><path d="M15.5 14.2a4.8 4.8 0 0 1 5 4.8" /></svg></span>Staff Management</button>
+      </nav>
+
+      <section id="attendance-page" class="page-panel">
+        <div class="page-heading fmcg-page-heading dash-hero-heading">
+          <div>
+            <p class="eyebrow">EXECUTIVE ANALYTICS · CALL_ATTENDENCE &amp; LIVE_CALL_DETAILS</p>
+            <h1>IKON Call Performance Dashboard <span id="dash-heading-date">Latest Available</span></h1>
+          </div>
+          <div class="dash-header-controls">
+            <div class="dash-period-switcher" role="tablist" aria-label="Performance Period">
+              <button type="button" class="dash-period-btn" data-dash-period="daily" role="tab" aria-selected="false">Daily</button>
+              <button type="button" class="dash-period-btn" data-dash-period="weekly" role="tab" aria-selected="false">Weekly</button>
+              <button type="button" class="dash-period-btn active" data-dash-period="monthly" role="tab" aria-selected="true">Monthly</button>
+            </div>
+            <button type="button" id="dash-filter-toggle-btn" class="button secondary dash-filter-toggle active" aria-controls="dash-filter-card" aria-expanded="true" aria-label="Hide filters" title="Hide filters">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.2 7.1v5.4l-3.6 1.8v-7.2L4 5Z" /></svg>
+            </button>
+            <label class="fmcg-date-picker">
+              <span>Reporting Date</span>
+              <input id="dash-report-date" type="date" />
+            </label>
+            <button type="button" id="dash-refresh-btn" class="button secondary">
+              <span aria-hidden="true">↻</span> Refresh
+            </button>
+            <button type="button" id="dash-toggle-uploads-btn" class="button primary">
+              <span aria-hidden="true">↑</span> Upload Data Files
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Data Upload Section (Preserves all upload functionality) -->
+        <div id="dash-uploads-drawer" class="dash-uploads-drawer hidden">
+          <div class="dash-uploads-grid">
+            <section class="card attendance-summary-card">
+              <div class="section-title">
+                <div><h2 class="mobile-live-call-summary-title">Mobile Live Call Summary</h2><p>Upload daily or multi-day call data. Call Nature is calculated automatically and new rows are saved to live_call_details.</p></div>
+                <span class="file-type">CSV / XLSX / XLS</span>
+              </div>
+              <label id="attendance-drop-zone" class="drop-zone attendance-drop-zone" for="attendance-file-input">
+                <input id="attendance-file-input" type="file" accept=".csv,.xlsx,.xls" hidden />
+                <span class="upload-icon" aria-hidden="true">↑</span>
+                <span><strong>Choose Mobile Live Calls File</strong><small>CSV or Excel · Header can start on row 2 or later · Max 200 MB</small></span>
+              </label>
+              <p id="attendance-status" class="attendance-status" role="status"></p>
+            </section>
+
+            <section id="fmcg-mobile-live-call-card" class="card attendance-summary-card">
+              <div class="section-title">
+                <div><h2 class="mobile-live-call-summary-title">Daily Call Attendance</h2><p>Upload a CSV or Excel file to add new rows to call_attendence automatically. Duplicate files and duplicate rows are skipped.</p></div>
+                <span class="file-type">CSV / XLSX / XLS</span>
+              </div>
+              <label id="fmcg-mobile-live-call-drop-zone" class="drop-zone attendance-drop-zone" for="fmcg-mobile-live-call-file-input">
+                <input id="fmcg-mobile-live-call-file-input" type="file" accept=".csv,.xlsx,.xls" hidden />
+                <span class="upload-icon" aria-hidden="true">↑</span>
+                <span><strong>Choose Daily Call Attendance File</strong><small>CSV or Excel · Header can start on row 2 or later · Max 200 MB</small></span>
+              </label>
+              <p id="fmcg-mobile-live-call-status" class="attendance-status" role="status"></p>
+            </section>
+          </div>
+
+          <section id="attendance-data-card" class="card attendance-data-card hidden">
+            <div class="section-title records-title">
+              <div><p class="step">UPLOADED DATA</p><h2 id="attendance-filename">Mobile Live Calls Summary</h2><p>Current uploaded records.</p></div>
+              <div class="record-count"><strong id="attendance-record-count">0</strong><span>TOTAL ROWS</span></div>
+            </div>
+            <section id="call-nature-results" class="call-nature-results hidden">
+              <div class="section-title"><div><p class="step">CALL NATURE LOGIC</p><h2>Call Nature conditions</h2><p id="call-nature-summary"></p></div><div class="call-nature-download-actions"><button id="download-call-nature" class="button primary">Download processed Excel</button><button id="download-call-nature-csv" class="button secondary">Download processed CSV</button></div></div>
+              <div id="call-nature-counts" class="validation-grid"></div>
+              <div class="table-wrap attendance-table-wrap"><table id="call-nature-preview"><thead><tr><th>CallType</th><th>Doctorname condition</th><th>Call Nature</th></tr></thead><tbody>
+                <tr><td>CALL</td><td>Any value</td><td>Provider Calls</td></tr>
+                <tr><td>EXCEPTION</td><td>PRESENT AT SCHEDULE MORNING</td><td>Attendance</td></tr>
+                <tr><td>EXCEPTION</td><td>PRESENT AT SCHEDULE EVENING</td><td>Attendance</td></tr>
+                <tr><td>EXCEPTION</td><td>NON MANDATORY LEAVE</td><td>LEAVE</td></tr>
+                <tr><td>EXCEPTION</td><td>MANDATORY LEAVE</td><td>LEAVE</td></tr>
+                <tr><td>EXCEPTION</td><td>SHORT LEAVE</td><td>LEAVE</td></tr>
+                <tr><td>EXCEPTION</td><td>Any other value</td><td>Others Exc Calls</td></tr>
+                <tr><td>Other / blank</td><td>Any value</td><td>Blank</td></tr>
+              </tbody></table></div>
+            </section>
+            <div class="table-wrap attendance-table-wrap"><table id="attendance-table"><thead></thead><tbody></tbody></table></div>
+            <div class="attendance-actions"><span id="attendance-page-indicator" class="page-indicator"></span><button id="attendance-prev" class="button secondary" disabled>← Previous</button><button id="attendance-next" class="button secondary" disabled>Next →</button></div>
+          </section>
+        </div>
+
+        <!-- Global Dashboard Filter Card -->
+        <section id="dash-filter-card" class="card dash-filter-card">
+          <div class="dash-filter-grid">
+            <label class="fmcg-filter-field dash-emp-filter-field">
+              <span>Employee Filter (FF.Id or Name)</span>
+              <select id="dash-employee-filter">
+                <option value="">All Employees</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Team</span>
+              <select id="dash-team-filter">
+                <option value="">All Teams</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Manager</span>
+              <select id="dash-manager-filter">
+                <option value="">All Managers</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Base Town</span>
+              <select id="dash-town-filter">
+                <option value="">All Base Towns</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Call Type</span>
+              <select id="dash-calltype-filter">
+                <option value="">All Call Types</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Call Nature</span>
+              <select id="dash-callnature-filter">
+                <option value="">All Call Natures</option>
+              </select>
+            </label>
+            <div class="fmcg-filter-actions">
+              <button type="button" id="dash-reset-btn" class="button secondary">Reset Filters</button>
+              <span id="dash-active-employee-pill" class="dash-active-emp-pill hidden"></span>
+            </div>
+          </div>
+          <div id="dash-status-bar" class="fmcg-status-bar hidden" role="status"><span id="dash-status-text"></span></div>
+        </section>
+
+        <!-- Informative KPI Cards Grid -->
+        <section class="dash-kpi-grid" id="dash-kpi-grid" aria-label="Key Performance Indicators">
+          <article class="card dash-kpi-card kpi-emerald">
+            <div class="dash-kpi-top">
+              <span class="dash-kpi-label" id="kpi-calls-title">Total Calls Done</span>
+            </div>
+            <strong class="dash-kpi-value" id="kpi-calls-value">0</strong>
+            <div class="dash-kpi-sub" id="kpi-calls-sub">Daily: 0 · Weekly: 0 · Monthly: 0</div>
+          </article>
+
+          <article class="card dash-kpi-card kpi-teal">
+            <div class="dash-kpi-top">
+              <span class="dash-kpi-label" id="kpi-emp-title">Active Field Force</span>
+            </div>
+            <strong class="dash-kpi-value" id="kpi-emp-value">0</strong>
+            <div class="dash-kpi-sub" id="kpi-emp-sub">Daily: 0 · Weekly: 0 · Monthly: 0</div>
+          </article>
+
+          <article class="card dash-kpi-card kpi-blue">
+            <div class="dash-kpi-top">
+              <span class="dash-kpi-label" id="kpi-avg-title">Avg Calls / Employee</span>
+            </div>
+            <strong class="dash-kpi-value" id="kpi-avg-value">0.0</strong>
+            <div class="dash-kpi-sub" id="kpi-avg-sub">Daily: 0 · Weekly: 0 · Monthly: 0</div>
+          </article>
+
+          <article class="card dash-kpi-card kpi-amber">
+            <div class="dash-kpi-top">
+              <span class="dash-kpi-label" id="kpi-att-title">Attendance Marked</span>
+            </div>
+            <strong class="dash-kpi-value" id="kpi-att-value">0</strong>
+            <div class="dash-kpi-sub" id="kpi-att-sub">Daily: 0 · Weekly: 0 · Monthly: 0</div>
+          </article>
+
+          <article class="card dash-kpi-card kpi-indigo">
+            <div class="dash-kpi-top">
+              <span class="dash-kpi-label" id="kpi-lcd-title">Provider Calls</span>
+            </div>
+            <strong class="dash-kpi-value" id="kpi-lcd-value">0</strong>
+            <div class="dash-kpi-sub" id="kpi-lcd-sub">Daily: 0 · Weekly: 0 · Monthly: 0</div>
+          </article>
+
+          <article class="card dash-kpi-card kpi-purple">
+            <div class="dash-kpi-top">
+              <span class="dash-kpi-label" id="kpi-prod-title">Products Detailed</span>
+            </div>
+            <strong class="dash-kpi-value" id="kpi-prod-value">0</strong>
+            <div class="dash-kpi-sub" id="kpi-prod-sub">Daily: 0 · Weekly: 0 · Monthly: 0</div>
+          </article>
+
+          <article class="card dash-kpi-card kpi-rose">
+            <div class="dash-kpi-top">
+              <span class="dash-kpi-label" id="kpi-exc-title">No Calls &amp; Leaves</span>
+            </div>
+            <strong class="dash-kpi-value" id="kpi-exc-value">0</strong>
+            <div class="dash-kpi-sub" id="kpi-exc-sub">No Calls: 0 · Leave: 0 · Other Exc: 0</div>
+          </article>
+
+          <article class="card dash-kpi-card kpi-cyan">
+            <div class="dash-kpi-top">
+              <span class="dash-kpi-label">GeoMeter Compliance</span>
+            </div>
+            <strong class="dash-kpi-value" id="kpi-geo-value">0%</strong>
+            <div class="dash-kpi-sub" id="kpi-geo-sub">Location Verified</div>
+          </article>
+        </section>
+
+        <!-- Charts Row 1: Line Chart (Daily/Weekly/Monthly Trend) + Pie/Donut ("Par") Charts -->
+        <div class="dash-charts-row dash-charts-row-top">
+          <section class="card dash-chart-card dash-line-chart-card">
+            <div class="dash-chart-header">
+              <div>
+                <p class="step">LINE CHART · TIME-SERIES PERFORMANCE</p>
+                <h2 id="dash-line-chart-title">Daily, Weekly &amp; Monthly Call &amp; Attendance Trend</h2>
+              </div>
+              <div class="dash-chart-controls">
+                <div class="dash-mini-tabs" id="dash-trend-granularity">
+                  <button type="button" class="dash-mini-tab active" data-trend-mode="daily">Daily Line</button>
+                  <button type="button" class="dash-mini-tab" data-trend-mode="weekly">Weekly Line</button>
+                  <button type="button" class="dash-mini-tab" data-trend-mode="monthly">Monthly Line</button>
+                </div>
+                <select id="dash-line-metric" class="dash-chart-select" aria-label="Line chart metric">
+                  <option value="calls_vs_att">Calls Done vs Attendance</option>
+                  <option value="lcd_vs_products">Provider Calls vs Products Detailed</option>
+                  <option value="avg_calls">Average Calls per Active Employee</option>
+                  <option value="cumulative">Cumulative Monthly Calls Progression</option>
+                </select>
+              </div>
+            </div>
+            <div class="dash-chart-legend" id="dash-line-legend"></div>
+            <div class="dash-svg-wrap" id="dash-line-chart-container"></div>
+          </section>
+
+          <section class="card dash-chart-card dash-pie-chart-card">
+            <div class="dash-chart-header">
+              <div>
+                <p class="step">PIE / PAR CHARTS · DISTRIBUTION</p>
+                <h2 id="dash-pie-chart-title">Call Type &amp; Call Nature Breakdown</h2>
+              </div>
+            </div>
+            <div class="dash-pie-grid">
+              <div class="dash-pie-panel">
+                <h3>Call Type</h3>
+                <div class="dash-pie-svg-wrap" id="dash-pie-calltype"></div>
+                <div class="dash-pie-legend" id="dash-pie-calltype-legend"></div>
+              </div>
+              <div class="dash-pie-panel">
+                <h3>Call Nature</h3>
+                <div class="dash-pie-svg-wrap" id="dash-pie-callnature"></div>
+                <div class="dash-pie-legend" id="dash-pie-callnature-legend"></div>
+              </div>
+              <div class="dash-pie-panel">
+                <h3>Team Share</h3>
+                <div class="dash-pie-svg-wrap" id="dash-pie-teamshare"></div>
+                <div class="dash-pie-legend" id="dash-pie-teamshare-legend"></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Charts Row 2: Bar Charts (Every Employee Daily/Weekly/Monthly Bar Chart + Team/Manager Bar Chart) -->
+        <div class="dash-charts-row dash-charts-row-bottom">
+          <section class="card dash-chart-card dash-emp-bar-card">
+            <div class="dash-chart-header">
+              <div>
+                <p class="step">BAR CHART · EVERY EMPLOYEE CALL PERFORMANCE</p>
+                <h2 id="dash-emp-bar-title">Employee Daily, Weekly &amp; Monthly Call Performance</h2>
+              </div>
+              <div class="dash-chart-controls">
+                <select id="dash-emp-bar-metric" class="dash-chart-select" aria-label="Employee bar metric">
+                  <option value="period_comparison">Daily vs Weekly vs Monthly Calls</option>
+                  <option value="monthlyCalls">Monthly Calls Done</option>
+                  <option value="weeklyCalls">Weekly Calls Done</option>
+                  <option value="dailyCalls">Daily Calls Done</option>
+                  <option value="monthlyLcdCalls">Provider Calls</option>
+                  <option value="monthlyProducts">Products Promoted</option>
+                  <option value="monthlyAttDays">Monthly Attendance Days</option>
+                  <option value="monthlyAvgCalls">Average Calls / Active Day</option>
+                </select>
+                <div class="dash-bar-pager">
+                  <button type="button" id="dash-emp-bar-prev" class="button secondary" title="Previous employees">‹ Prev</button>
+                  <span id="dash-emp-bar-page-label">1–20 of 0</span>
+                  <button type="button" id="dash-emp-bar-next" class="button secondary" title="Next employees">Next ›</button>
+                </div>
+              </div>
+            </div>
+            <div class="dash-chart-legend" id="dash-emp-bar-legend"></div>
+            <div class="dash-svg-wrap" id="dash-emp-bar-container"></div>
+          </section>
+
+          <section class="card dash-chart-card dash-group-bar-card">
+            <div class="dash-chart-header">
+              <div>
+                <p class="step">BAR CHART · ORGANIZATIONAL COMPARISON</p>
+                <h2 id="dash-group-bar-title">Team, Manager &amp; Base Town Performance</h2>
+              </div>
+              <div class="dash-chart-controls">
+                <div class="dash-mini-tabs" id="dash-group-dimension">
+                  <button type="button" class="dash-mini-tab active" data-group-dim="team">By Team</button>
+                  <button type="button" class="dash-mini-tab" data-group-dim="manager">By Manager</button>
+                  <button type="button" class="dash-mini-tab" data-group-dim="town">By Base Town</button>
+                </div>
+              </div>
+            </div>
+            <div class="dash-chart-legend" id="dash-group-bar-legend"></div>
+            <div class="dash-svg-wrap" id="dash-group-bar-container"></div>
+          </section>
+        </div>
+
+        <!-- Every Employee Daily, Weekly, Monthly Call Performance Interactive Matrix -->
+        <section class="card fmcg-summary-card dash-emp-matrix-card">
+          <div class="fmcg-report-sheet" id="dash-emp-matrix-sheet">
+            <div class="fmcg-sheet-banner">
+              <div class="fmcg-banner-titles">
+                <strong id="dash-emp-matrix-title">Every Employee Daily, Weekly &amp; Monthly Call Performance Matrix</strong>
+              </div>
+              <div class="fmcg-banner-actions">
+                <input id="dash-emp-matrix-search" type="search" class="dash-inline-search" placeholder="Filter employee matrix…" autocomplete="off" />
+                <button type="button" id="dash-emp-matrix-export" class="button secondary dash-banner-btn">↓ Export CSV</button>
+                <span id="dash-emp-matrix-badge" class="fmcg-row-badge">0 Employees</span>
+                <button type="button" id="dash-emp-matrix-fs" class="table-fullscreen-btn" title="Expand Table to Full Screen (⛶)" aria-label="Expand Table to Full Screen">
+                  <span class="fs-icon-open" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" /></svg></span>
+                  <span class="fs-icon-exit hidden" aria-hidden="true"><span class="fs-exit-text">Exit</span></span>
+                </button>
+              </div>
+            </div>
+            <div class="table-wrap fmcg-table-wrap">
+              <table id="dash-emp-matrix-table" class="fmcg-excel-table">
+                <thead>
+                  <tr class="fmcg-group-header-row">
+                    <th colspan="5" class="group-th group-th-base">Employee Identity</th>
+                    <th colspan="4" class="group-th group-th-attendance" id="dash-matrix-daily-group">Daily Performance</th>
+                    <th colspan="5" class="group-th group-th-calls" id="dash-matrix-weekly-group">Weekly Performance (7-Day)</th>
+                    <th colspan="9" class="group-th group-th-base" id="dash-matrix-monthly-group">Monthly Performance (MTD &amp; Weekly Breakdown)</th>
+                  </tr>
+                  <tr id="dash-emp-matrix-head" class="fmcg-col-header-row">
+                    <th data-emp-sort="ff_id" class="sortable"><span>FF.Id</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="ff_name" class="sortable"><span>Employee Name</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="team" class="sortable"><span>Team</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="manager" class="sortable"><span>Manager</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="base_town" class="sortable group-end-col"><span>Base Town</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="dailyCalls" class="sortable att-col-th num-col"><span>Daily Calls</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="dailyAtt" class="sortable att-col-th num-col"><span>Daily Attn</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="dailyLcdCalls" class="sortable att-col-th num-col"><span>Daily Provider Calls</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="dailyProducts" class="sortable att-col-th num-col group-end-col"><span>Daily Products</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="weeklyCalls" class="sortable call-col-th num-col"><span>Weekly Calls</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="weeklyAttDays" class="sortable call-col-th num-col"><span>Weekly Attn Days</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="weeklyAvgCalls" class="sortable call-col-th num-col"><span>Weekly Avg/Day</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="weeklyLcdCalls" class="sortable call-col-th num-col"><span>Weekly Provider Calls</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="weeklyProducts" class="sortable call-col-th num-col group-end-col"><span>Weekly Products</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="monthlyCalls" class="sortable num-col sorted"><span>Monthly Calls</span><i class="sort-icon">↓</i></th>
+                    <th data-emp-sort="monthlyAttDays" class="sortable num-col"><span>Monthly Attn Days</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="monthlyAvgCalls" class="sortable num-col"><span>Monthly Avg/Day</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="w1Calls" class="sortable day-col"><span>W1</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="w2Calls" class="sortable day-col"><span>W2</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="w3Calls" class="sortable day-col"><span>W3</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="monthlyLcdCalls" class="sortable num-col"><span>Provider Calls</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="monthlyProducts" class="sortable num-col"><span>Products</span><i class="sort-icon">↕</i></th>
+                    <th data-emp-sort="uniqueDoctors" class="sortable num-col"><span>Doctors</span><i class="sort-icon">↕</i></th>
+                  </tr>
+                </thead>
+                <tbody id="dash-emp-matrix-tbody">
+                  <tr><td colspan="23" class="fmcg-state-cell">Loading employee daily, weekly, and monthly call performance…</td></tr>
+                </tbody>
+                <tfoot id="dash-emp-matrix-tfoot"></tfoot>
+              </table>
+            </div>
+            <footer class="staff-pagination-bar">
+              <div class="staff-page-info" id="dash-emp-matrix-page-info">Showing 0–0 of 0 employees</div>
+              <div class="staff-page-controls">
+                <select id="dash-emp-matrix-pagesize" class="dash-pagesize-select" aria-label="Rows per page">
+                  <option value="25" selected>25 / page</option>
+                  <option value="50">50 / page</option>
+                  <option value="100">100 / page</option>
+                </select>
+                <button type="button" id="dash-emp-matrix-prev" class="button secondary" disabled>‹ Prev</button>
+                <button type="button" id="dash-emp-matrix-next" class="button secondary" disabled>Next ›</button>
+              </div>
+            </footer>
+          </div>
+        </section>
+
+        <!-- Interactive Database Tables Section: public.call_attendence & public.live_call_details -->
+        <section class="dash-db-tables-section">
+          <div class="dash-db-tables-header">
+            <div>
+              <p class="eyebrow">INTERACTIVE SOURCE TABLES · POSTGRESQL</p>
+              <h2>Interactive Database Tables (<code>call_attendence</code> &amp; <code>live_call_details</code>)</h2>
+            </div>
+            <div class="dash-mini-tabs" id="dash-db-table-switcher">
+              <button type="button" class="dash-mini-tab active" data-db-view="split">Side-by-Side (Left &amp; Right)</button>
+              <button type="button" class="dash-mini-tab" data-db-view="both">Stacked Full Width</button>
+              <button type="button" class="dash-mini-tab" data-db-view="ca">call_attendence Only</button>
+              <button type="button" class="dash-mini-tab" data-db-view="lcd">live_call_details Only</button>
+            </div>
+          </div>
+
+          <div class="dash-db-tables-grid split-mode" id="dash-db-tables-grid">
+            <!-- Interactive Table 1: public.call_attendence -->
+            <section class="card fmcg-summary-card" id="dash-ca-card">
+            <div class="dash-table-kpi-strip" id="dash-ca-summary-strip">
+              <div class="dash-strip-item"><small>TABLE</small><strong>public.call_attendence</strong></div>
+              <div class="dash-strip-item"><small>MATCHING ROWS</small><strong id="ca-sum-rows">0</strong></div>
+              <div class="dash-strip-item"><small>CALL DONE SUM</small><strong id="ca-sum-calls">0</strong></div>
+              <div class="dash-strip-item"><small>EXCEPTION DONE SUM</small><strong id="ca-sum-exc">0</strong></div>
+              <div class="dash-strip-item"><small>NO CALLS ROWS</small><strong id="ca-sum-nocalls">0</strong></div>
+              <div class="dash-strip-item"><small>DISTINCT FF.ID</small><strong id="ca-sum-emps">0</strong></div>
+            </div>
+
+            <div class="fmcg-toolbar dash-table-toolbar">
+              <label class="fmcg-search-field">
+                <span>Search call_attendence</span>
+                <input id="ca-table-search" type="search" placeholder="Search by FF.Id, FF.Name, Team, Manager, Base Town, Call Date…" autocomplete="off" />
+              </label>
+              <label class="fmcg-filter-field">
+                <span>Team</span>
+                <select id="ca-table-team"><option value="">All Teams</option></select>
+              </label>
+              <label class="fmcg-filter-field">
+                <span>Call Type</span>
+                <select id="ca-table-calltype"><option value="">All Call Types</option></select>
+              </label>
+              <label class="fmcg-filter-field">
+                <span>Date From</span>
+                <input id="ca-table-from" type="date" />
+              </label>
+              <label class="fmcg-filter-field">
+                <span>Date To</span>
+                <input id="ca-table-to" type="date" />
+              </label>
+              <div class="fmcg-filter-actions">
+                <button type="button" id="ca-table-reset" class="button secondary">Reset</button>
+                <button type="button" id="ca-table-export" class="button primary">↓ CSV</button>
+              </div>
+            </div>
+
+            <div class="fmcg-report-sheet" id="dash-ca-sheet">
+              <div class="fmcg-sheet-banner">
+                <div class="fmcg-banner-titles">
+                  <strong>public.call_attendence — Interactive Call &amp; Attendance Table</strong>
+                  <span class="fmcg-banner-sub">Columns: team, ff_id, ff_name, manager, base_town, call_date, call_type, total_sum_of_done, total_distinct_count_of_ff_id</span>
+                </div>
+                <div class="fmcg-banner-actions">
+                  <span id="ca-table-badge" class="fmcg-row-badge">0 Rows</span>
+                  <button type="button" id="ca-table-fs" class="table-fullscreen-btn" title="Expand Table to Full Screen (⛶)" aria-label="Expand Table to Full Screen">
+                    <span class="fs-icon-open" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" /></svg></span>
+                    <span class="fs-icon-exit hidden" aria-hidden="true"><span class="fs-exit-text">Exit</span></span>
+                  </button>
+                </div>
+              </div>
+              <div class="table-wrap fmcg-table-wrap">
+                <table id="ca-interactive-table" class="fmcg-excel-table">
+                  <thead>
+                    <tr id="ca-table-head" class="fmcg-col-header-row">
+                      <th data-ca-sort="call_date" class="sortable sorted"><span>Call Date</span><i class="sort-icon">↓</i></th>
+                      <th data-ca-sort="team" class="sortable"><span>Team</span><i class="sort-icon">↕</i></th>
+                      <th data-ca-sort="ff_id" class="sortable"><span>FF.Id</span><i class="sort-icon">↕</i></th>
+                      <th data-ca-sort="ff_name" class="sortable"><span>FF.Name</span><i class="sort-icon">↕</i></th>
+                      <th data-ca-sort="manager" class="sortable"><span>Manager</span><i class="sort-icon">↕</i></th>
+                      <th data-ca-sort="base_town" class="sortable"><span>Base Town</span><i class="sort-icon">↕</i></th>
+                      <th data-ca-sort="call_type" class="sortable"><span>CallType</span><i class="sort-icon">↕</i></th>
+                      <th data-ca-sort="total_sum_of_done" class="sortable num-col"><span>Total Sum of DONE</span><i class="sort-icon">↕</i></th>
+                      <th data-ca-sort="total_distinct_count_of_ff_id" class="sortable num-col"><span>Distinct FF.Id</span><i class="sort-icon">↕</i></th>
+                    </tr>
+                  </thead>
+                  <tbody id="ca-table-tbody">
+                    <tr><td colspan="9" class="fmcg-state-cell">Loading public.call_attendence records…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <footer class="staff-pagination-bar">
+                <div class="staff-page-info" id="ca-table-page-info">Showing 0–0 of 0 records</div>
+                <div class="staff-page-controls">
+                  <select id="ca-table-pagesize" class="dash-pagesize-select" aria-label="Rows per page">
+                    <option value="25" selected>25 / page</option>
+                    <option value="50">50 / page</option>
+                    <option value="100">100 / page</option>
+                  </select>
+                  <button type="button" id="ca-table-first" class="button secondary" disabled>« First</button>
+                  <button type="button" id="ca-table-prev" class="button secondary" disabled>‹ Prev</button>
+                  <span id="ca-table-pagenums" class="staff-page-numbers"></span>
+                  <button type="button" id="ca-table-next" class="button secondary" disabled>Next ›</button>
+                  <button type="button" id="ca-table-last" class="button secondary" disabled>Last »</button>
+                </div>
+              </footer>
+            </div>
+          </section>
+
+          <!-- Interactive Table 2: public.live_call_details -->
+          <section class="card fmcg-summary-card" id="dash-lcd-card">
+            <div class="dash-table-kpi-strip" id="dash-lcd-summary-strip">
+              <div class="dash-strip-item"><small>TABLE</small><strong>public.live_call_details</strong></div>
+              <div class="dash-strip-item"><small>MATCHING ROWS</small><strong id="lcd-sum-rows">0</strong></div>
+              <div class="dash-strip-item"><small>PROVIDER CALLS</small><strong id="lcd-sum-provider">0</strong></div>
+              <div class="dash-strip-item"><small>ATTENDANCE ROWS</small><strong id="lcd-sum-att">0</strong></div>
+              <div class="dash-strip-item"><small>LEAVE / OTHER EXC</small><strong id="lcd-sum-exc">0</strong></div>
+              <div class="dash-strip-item"><small>TOTAL PRODUCTS</small><strong id="lcd-sum-products">0</strong></div>
+              <div class="dash-strip-item"><small>UNIQUE DOCTORS</small><strong id="lcd-sum-doctors">0</strong></div>
+              <div class="dash-strip-item"><small>IN RANGE</small><strong id="lcd-sum-inrange">0</strong></div>
+            </div>
+
+            <div class="fmcg-toolbar dash-table-toolbar dash-lcd-toolbar">
+              <label class="fmcg-search-field">
+                <span>Search live_call_details</span>
+                <input id="lcd-table-search" type="search" placeholder="Search by FF.Id, FF.Name, Doctorname, PMDC, Manager, Town…" autocomplete="off" />
+              </label>
+              <label class="fmcg-filter-field">
+                <span>Team</span>
+                <select id="lcd-table-team"><option value="">All Teams</option></select>
+              </label>
+              <label class="fmcg-filter-field">
+                <span>Call Nature</span>
+                <select id="lcd-table-nature"><option value="">All Call Natures</option></select>
+              </label>
+              <label class="fmcg-filter-field">
+                <span>CallType</span>
+                <select id="lcd-table-calltype"><option value="">All CallTypes</option></select>
+              </label>
+              <label class="fmcg-filter-field">
+                <span>Date From</span>
+                <input id="lcd-table-from" type="date" />
+              </label>
+              <label class="fmcg-filter-field">
+                <span>Date To</span>
+                <input id="lcd-table-to" type="date" />
+              </label>
+              <div class="fmcg-filter-actions">
+                <button type="button" id="lcd-table-reset" class="button secondary">Reset</button>
+                <button type="button" id="lcd-table-export" class="button primary">↓ CSV</button>
+              </div>
+            </div>
+
+            <div class="fmcg-report-sheet" id="dash-lcd-sheet">
+              <div class="fmcg-sheet-banner">
+                <div class="fmcg-banner-titles">
+                  <strong>public.live_call_details — Interactive Live Call Details Table</strong>
+                  <span class="fmcg-banner-sub">Columns: team, ff_id, ff_name, call_date, manager, base_town, pmdc, doctorname, call_nature, calltype, ww, lng, lat, total_sum_noofcalls, total_sum_noofproducts, geometer_range</span>
+                </div>
+                <div class="fmcg-banner-actions">
+                  <span id="lcd-table-badge" class="fmcg-row-badge">0 Rows</span>
+                  <button type="button" id="lcd-table-fs" class="table-fullscreen-btn" title="Expand Table to Full Screen (⛶)" aria-label="Expand Table to Full Screen">
+                    <span class="fs-icon-open" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" /></svg></span>
+                    <span class="fs-icon-exit hidden" aria-hidden="true"><span class="fs-exit-text">Exit</span></span>
+                  </button>
+                </div>
+              </div>
+              <div class="table-wrap fmcg-table-wrap">
+                <table id="lcd-interactive-table" class="fmcg-excel-table">
+                  <thead>
+                    <tr id="lcd-table-head" class="fmcg-col-header-row">
+                      <th data-lcd-sort="call_date" class="sortable sorted"><span>Call Date</span><i class="sort-icon">↓</i></th>
+                      <th data-lcd-sort="team" class="sortable"><span>Team</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="ff_id" class="sortable"><span>FF.Id</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="ff_name" class="sortable"><span>FF.Name</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="manager" class="sortable"><span>Manager</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="base_town" class="sortable"><span>Base Town</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="pmdc" class="sortable"><span>PMDC</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="doctorname" class="sortable"><span>Doctorname</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="call_nature" class="sortable"><span>Call Nature</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="calltype" class="sortable"><span>CallType</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="ww" class="sortable"><span>WW</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="total_sum_noofcalls" class="sortable num-col"><span>No. Of Calls</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="total_sum_noofproducts" class="sortable num-col"><span>No. Of Products</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="geometer_range" class="sortable"><span>GeoMeter Range</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="lng" class="sortable num-col"><span>LNG</span><i class="sort-icon">↕</i></th>
+                      <th data-lcd-sort="lat" class="sortable num-col"><span>LAT</span><i class="sort-icon">↕</i></th>
+                    </tr>
+                  </thead>
+                  <tbody id="lcd-table-tbody">
+                    <tr><td colspan="16" class="fmcg-state-cell">Loading public.live_call_details records…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <footer class="staff-pagination-bar">
+                <div class="staff-page-info" id="lcd-table-page-info">Showing 0–0 of 0 records</div>
+                <div class="staff-page-controls">
+                  <select id="lcd-table-pagesize" class="dash-pagesize-select" aria-label="Rows per page">
+                    <option value="25" selected>25 / page</option>
+                    <option value="50">50 / page</option>
+                    <option value="100">100 / page</option>
+                  </select>
+                  <button type="button" id="lcd-table-first" class="button secondary" disabled>« First</button>
+                  <button type="button" id="lcd-table-prev" class="button secondary" disabled>‹ Prev</button>
+                  <span id="lcd-table-pagenums" class="staff-page-numbers"></span>
+                  <button type="button" id="lcd-table-next" class="button secondary" disabled>Next ›</button>
+                  <button type="button" id="lcd-table-last" class="button secondary" disabled>Last »</button>
+                </div>
+              </footer>
+            </div>
+          </section>
+          </div>
+        </section>
+      </section>
+
+      <section id="fmcg-ikon-mtd-page" class="page-panel hidden">
+        <div class="page-heading fmcg-page-heading">
+          <div>
+            <p class="eyebrow">PERFORMANCE REPORTING</p>
+            <h1 id="fmcg-summary-heading">FMCG Team – IKON MTD Call Performance Summary Till <span id="fmcg-heading-date">Latest Available</span></h1>
+            <p>FMCG field-force employee roster, territory mapping, vacancy tracking, and MTD call performance summary.</p>
+          </div>
+          <div class="fmcg-header-actions">
+            <label class="fmcg-date-picker">
+              <span>Reporting Date</span>
+              <input id="fmcg-date-filter" type="date" />
+            </label>
+            <button id="fmcg-export-excel" type="button" class="button primary fmcg-export-btn">
+              <span aria-hidden="true">↓</span> Export Excel
+            </button>
+          </div>
+        </div>
+
+        <section class="card fmcg-summary-card">
+          <div class="fmcg-toolbar">
+            <label class="fmcg-search-field">
+              <span>Search Employee / Position / SAS ID / Emp. Code</span>
+              <input id="fmcg-search-input" type="search" placeholder="Search by F.F Name, Position_Code, SAS ID, or Emp. Code…" autocomplete="off" />
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Designation</span>
+              <select id="fmcg-desg-filter">
+                <option value="">All Designations</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Zone</span>
+              <select id="fmcg-zone-filter">
+                <option value="">All Zones</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>FMCG Region</span>
+              <select id="fmcg-region-filter">
+                <option value="">All Regions</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Base Town</span>
+              <select id="fmcg-town-filter">
+                <option value="">All Base Towns</option>
+              </select>
+            </label>
+            <div class="fmcg-filter-actions">
+              <button id="fmcg-reset-filters" type="button" class="button secondary">Reset</button>
+            </div>
+          </div>
+
+          <div id="fmcg-status-bar" class="fmcg-status-bar" role="status">
+            <span id="fmcg-status-text">Loading FMCG summary records…</span>
+            <span id="fmcg-metrics-note" class="fmcg-metrics-note">Call and attendance metrics use EXCEPTION and CALL rows with DONE &gt; 0 from the shared call_attendence table.</span>
+          </div>
+
+          <div class="fmcg-report-sheet" id="fmcg-report-sheet">
+            <div class="fmcg-sheet-banner">
+              <div class="fmcg-banner-titles">
+                <strong id="fmcg-banner-title">FMCG Team – IKON MTD Call Performance Summary Till Latest Available</strong>
+                <span id="fmcg-banner-sub" class="fmcg-banner-sub hidden"></span>
+              </div>
+              <div class="fmcg-banner-actions">
+                <span id="fmcg-row-badge" class="fmcg-row-badge">0 Rows</span>
+                <button type="button" id="fmcg-fullscreen-btn" class="table-fullscreen-btn" title="Expand Table to Full Screen (⛶)" aria-label="Expand Table to Full Screen">
+                  <span class="fs-icon-open" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                    </svg>
+                  </span>
+                  <span class="fs-icon-exit hidden" aria-hidden="true">
+                    <span class="fs-exit-text">Exit</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div class="fmcg-fullscreen-filter-toolbar is-collapsed" id="fmcg-fullscreen-filter-toolbar" aria-label="FMCG report filters">
+              <div class="fmcg-fullscreen-filter-header">
+                <div class="fmcg-fullscreen-filter-title"><strong>Report Filters</strong><span id="fmcg-fullscreen-filter-count">0 active</span></div>
+                <div class="fmcg-fullscreen-filter-actions">
+                  <button type="button" id="fmcg-fullscreen-filter-toggle" class="button secondary">Show Filters</button>
+                  <button type="button" id="fmcg-fullscreen-filter-reset" class="button secondary">Reset All</button>
+                  <button type="button" id="fmcg-fullscreen-filter-apply" class="button primary">Apply Filters</button>
+                </div>
+              </div>
+              <div class="fmcg-fullscreen-filter-grid" id="fmcg-fullscreen-filter-grid">
+                <label class="fmcg-filter-field"><span>Reporting Date</span><input id="fmcg-fs-report-date" type="date" /></label>
+                <label class="fmcg-filter-field"><span>Search Employee / Position / SAS ID / Emp. Code</span><input id="fmcg-fs-search" type="search" placeholder="Search by F.F Name, Position_Code, SAS ID, or Emp. Code…" autocomplete="off" /></label>
+                <label class="fmcg-filter-field"><span>Designation</span><input id="fmcg-fs-designation" list="fmcg-fs-designation-options" autocomplete="off" /><datalist id="fmcg-fs-designation-options"></datalist></label>
+                <label class="fmcg-filter-field"><span>Zone</span><input id="fmcg-fs-zone" list="fmcg-fs-zone-options" autocomplete="off" /><datalist id="fmcg-fs-zone-options"></datalist></label>
+                <label class="fmcg-filter-field"><span>Region</span><input id="fmcg-fs-region" list="fmcg-fs-region-options" autocomplete="off" /><datalist id="fmcg-fs-region-options"></datalist></label>
+                <label class="fmcg-filter-field"><span>Base Town</span><input id="fmcg-fs-town" list="fmcg-fs-town-options" autocomplete="off" /><datalist id="fmcg-fs-town-options"></datalist></label>
+              </div>
+              <div class="fmcg-filter-chips" id="fmcg-fullscreen-filter-chips" aria-live="polite"></div>
+            </div>
+            <div class="table-wrap fmcg-table-wrap">
+              <table id="fmcg-summary-table" class="fmcg-excel-table">
+                <thead id="fmcg-summary-thead">
+                  <tr id="fmcg-group-header-row" class="fmcg-group-header-row">
+                    <th colspan="19" class="group-th group-th-base" id="fmcg-group-base-title">FMCG Team – IKON MTD Call Performance Summary Till Latest Available</th>
+                    <th colspan="33" class="group-th group-th-attendance" id="fmcg-group-att-title">Attendance (OCT-2026)</th>
+                    <th colspan="33" class="group-th group-th-calls" id="fmcg-group-calls-title">Calls + Exceptions Other Calls (OCT-2026)</th>
+                  </tr>
+                  <tr id="fmcg-col-header-row" class="fmcg-col-header-row">
+                    <th data-sort="desg" class="sortable"><span>Legend</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="zone" class="sortable"><span>Zone</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="region" class="sortable"><span>FMCG Region</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="dept_territory_code" class="sortable"><span>Dept. Territory Code</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="position_code" class="sortable"><span>Position_Code</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="sas_id" class="sortable"><span>SAS_ID</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="ff_name" class="sortable"><span>SPO Name</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="base_town" class="sortable"><span>Base Town</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="emp_type" class="sortable"><span>Emp. Type</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="emp_code" class="sortable"><span>Emp. Code</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="payroll_status" class="sortable"><span>Payroll Status</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="doj" class="sortable"><span>D.O.J</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="reps" class="sortable num-col"><span>Reps</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="vacant" class="sortable num-col"><span># Of Vacant</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="day_att_used" class="sortable num-col"><span>Active SPOs Today Attn</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="mtd_att_used" class="sortable num-col"><span>Active SPOs MTD Attn</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="day_call_used" class="sortable num-col"><span>Active SPOs Today Calls</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="mtd_calls_used" class="sortable num-col"><span>Active SPOs MTD Calls</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="ikon_used" class="sortable num-col"><span>IKON Used</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                  </tr>
+                </thead>
+                <tbody id="fmcg-summary-tbody">
+                  <tr><td colspan="85" class="fmcg-state-cell">Loading FMCG employee records…</td></tr>
+                </tbody>
+                <tfoot id="fmcg-summary-tfoot">
+                  <tr id="fmcg-tfoot-row">
+                    <td colspan="6" class="tfoot-label">Total Summary</td>
+                    <td id="fmcg-total-rows-label">0 Record(s)</td>
+                    <td colspan="5"></td>
+                    <td id="fmcg-total-reps" class="num-col">0</td>
+                    <td id="fmcg-total-vacant" class="num-col">0</td>
+                    <td class="num-col">-</td>
+                    <td class="num-col">-</td>
+                    <td class="num-col">-</td>
+                    <td class="num-col">-</td>
+                    <td class="num-col">-</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="management-print-card fmcg-report-sheet" id="fmcg-management-print-card">
+          <div class="fmcg-sheet-banner management-print-banner">
+            <div class="fmcg-banner-titles">
+              <strong id="fmcg-management-banner-title">FMCG Team – IKON MTD Call Performance Summary · MANAGEMENT PRINT Till Latest Available</strong>
+              <span id="fmcg-management-banner-sub" class="fmcg-banner-sub hidden"></span>
+            </div>
+            <div class="fmcg-banner-actions">
+              <span id="fmcg-management-row-badge" class="fmcg-row-badge">0 Rows</span>
+              <button type="button" id="fmcg-management-fullscreen-btn" class="table-fullscreen-btn" title="Expand Management Print to Full Screen (⛶)" aria-label="Expand Management Print to Full Screen">
+                <span class="fs-icon-open" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  </svg>
+                </span>
+                <span class="fs-icon-exit hidden" aria-hidden="true"><span class="fs-exit-text">Exit</span></span>
+              </button>
+            </div>
+          </div>
+          <div class="management-print-table-wrap">
+            <table id="fmcg-management-print-table" class="management-print-table">
+              <thead>
+                <tr class="management-print-group-row">
+                  <th colspan="7" class="management-group-base" id="fmcg-management-print-title">FMCG Team - IKON MTD Call Performance Summary Till Latest Available</th>
+                  <th colspan="4" class="management-group-attendance">Attendance</th>
+                  <th colspan="6" class="management-group-calls">Calls + Exception Other Calls</th>
+                  <th rowspan="2" class="management-group-comments">Comments</th>
+                </tr>
+                <tr class="management-print-column-row">
+                  <th>Legend</th>
+                  <th>Zone</th>
+                  <th>Region</th>
+                  <th>F.F Name</th>
+                  <th>Reps</th>
+                  <th># Of Vacant</th>
+                  <th>Not Used IKON Today</th>
+                  <th># of Attn Yesterday</th>
+                  <th>Active SPOs Today</th>
+                  <th># of Attn MTD</th>
+                  <th>Active SPOs MTD</th>
+                  <th># of Calls Yesterday</th>
+                  <th># of Calls Today</th>
+                  <th>Active SPOs Today</th>
+                  <th># of Calls MTD</th>
+                  <th>Active SPOs MTD</th>
+                  <th>Average P/Rep/Day</th>
+                </tr>
+              </thead>
+              <tbody id="fmcg-management-print-tbody">
+                <tr><td colspan="18" class="fmcg-state-cell">Loading management summary...</td></tr>
+              </tbody>
+              <tfoot id="fmcg-management-print-tfoot"></tfoot>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="pharma-ikon-mtd-page" class="page-panel hidden">
+        <div class="page-heading fmcg-page-heading">
+          <div>
+            <p class="eyebrow">PERFORMANCE REPORTING</p>
+            <h1 id="pharma-summary-heading">PHARMA Team – IKON MTD Call Performance Summary Till <span id="pharma-heading-date">Latest Available</span></h1>
+            <p>PHARMA field-force employee roster, territory mapping, vacancy tracking, and MTD call performance summary.</p>
+          </div>
+          <div class="fmcg-header-actions">
+            <label class="fmcg-date-picker">
+              <span>Reporting Date</span>
+              <input id="pharma-date-filter" type="date" />
+            </label>
+            <button id="pharma-export-excel" type="button" class="button primary fmcg-export-btn">
+              <span aria-hidden="true">↓</span> Export Excel
+            </button>
+          </div>
+        </div>
+
+        <section class="card fmcg-summary-card">
+          <div class="fmcg-toolbar">
+            <label class="fmcg-search-field">
+              <span>Search Employee / Position / SAS ID / Emp. Code</span>
+              <input id="pharma-search-input" type="search" placeholder="Search by F.F Name, Position_Code, SAS ID, or Emp. Code…" autocomplete="off" />
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Designation</span>
+              <select id="pharma-desg-filter">
+                <option value="">All Designations</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Zone</span>
+              <select id="pharma-zone-filter">
+                <option value="">All Zones</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>PHARMA Region</span>
+              <select id="pharma-region-filter">
+                <option value="">All Regions</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Base Town</span>
+              <select id="pharma-town-filter">
+                <option value="">All Base Towns</option>
+              </select>
+            </label>
+            <div class="fmcg-filter-actions">
+              <button id="pharma-reset-filters" type="button" class="button secondary">Reset</button>
+            </div>
+          </div>
+
+          <div id="pharma-status-bar" class="fmcg-status-bar" role="status">
+            <span id="pharma-status-text">Loading PHARMA summary records…</span>
+            <span id="pharma-metrics-note" class="fmcg-metrics-note">Call and attendance metrics use EXCEPTION and CALL rows with DONE &gt; 0 from the shared call_attendence table.</span>
+          </div>
+
+          <div class="fmcg-report-sheet" id="pharma-report-sheet">
+            <div class="fmcg-sheet-banner">
+              <div class="fmcg-banner-titles">
+                <strong id="pharma-banner-title">PHARMA Team – IKON MTD Call Performance Summary Till Latest Available</strong>
+                <span id="pharma-banner-sub" class="fmcg-banner-sub hidden"></span>
+              </div>
+              <div class="fmcg-banner-actions">
+                <span id="pharma-row-badge" class="fmcg-row-badge">0 Rows</span>
+                <button type="button" id="pharma-fullscreen-btn" class="table-fullscreen-btn" title="Expand Table to Full Screen (⛶)" aria-label="Expand Table to Full Screen">
+                  <span class="fs-icon-open" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                    </svg>
+                  </span>
+                  <span class="fs-icon-exit hidden" aria-hidden="true">
+                    <span class="fs-exit-text">Exit</span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div class="fmcg-fullscreen-filter-toolbar is-collapsed" id="pharma-fullscreen-filter-toolbar" aria-label="PHARMA report filters">
+              <div class="fmcg-fullscreen-filter-header">
+                <div class="fmcg-fullscreen-filter-title"><strong>Report Filters</strong><span id="pharma-fullscreen-filter-count">0 active</span></div>
+                <div class="fmcg-fullscreen-filter-actions">
+                  <button type="button" id="pharma-fullscreen-filter-toggle" class="button secondary">Show Filters</button>
+                  <button type="button" id="pharma-fullscreen-filter-reset" class="button secondary">Reset All</button>
+                  <button type="button" id="pharma-fullscreen-filter-apply" class="button primary">Apply Filters</button>
+                </div>
+              </div>
+              <div class="fmcg-fullscreen-filter-grid" id="pharma-fullscreen-filter-grid">
+                <label class="fmcg-filter-field"><span>Reporting Date</span><input id="pharma-fs-report-date" type="date" /></label>
+                <label class="fmcg-filter-field"><span>Search Employee / Position / SAS ID / Emp. Code</span><input id="pharma-fs-search" type="search" placeholder="Search by F.F Name, Position_Code, SAS ID, or Emp. Code…" autocomplete="off" /></label>
+                <label class="fmcg-filter-field"><span>Designation</span><input id="pharma-fs-designation" list="pharma-fs-designation-options" autocomplete="off" /><datalist id="pharma-fs-designation-options"></datalist></label>
+                <label class="fmcg-filter-field"><span>Zone</span><input id="pharma-fs-zone" list="pharma-fs-zone-options" autocomplete="off" /><datalist id="pharma-fs-zone-options"></datalist></label>
+                <label class="fmcg-filter-field"><span>Region</span><input id="pharma-fs-region" list="pharma-fs-region-options" autocomplete="off" /><datalist id="pharma-fs-region-options"></datalist></label>
+                <label class="fmcg-filter-field"><span>Base Town</span><input id="pharma-fs-town" list="pharma-fs-town-options" autocomplete="off" /><datalist id="pharma-fs-town-options"></datalist></label>
+              </div>
+              <div class="fmcg-filter-chips" id="pharma-fullscreen-filter-chips" aria-live="polite"></div>
+            </div>
+            <div class="table-wrap fmcg-table-wrap">
+              <table id="pharma-summary-table" class="fmcg-excel-table">
+                <thead id="pharma-summary-thead">
+                  <tr id="pharma-group-header-row" class="fmcg-group-header-row">
+                    <th colspan="19" class="group-th group-th-base" id="pharma-group-base-title">PHARMA Team – IKON MTD Call Performance Summary Till Latest Available</th>
+                    <th colspan="33" class="group-th group-th-attendance" id="pharma-group-att-title">Attendance (OCT-2026)</th>
+                    <th colspan="33" class="group-th group-th-calls" id="pharma-group-calls-title">Calls + Exceptions Other Calls (OCT-2026)</th>
+                  </tr>
+                  <tr id="pharma-col-header-row" class="fmcg-col-header-row">
+                    <th data-sort="desg" class="sortable"><span>Legend</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="zone" class="sortable"><span>Zone</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="region" class="sortable"><span>PHARMA Region</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="dept_territory_code" class="sortable"><span>Dept. Territory Code</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="position_code" class="sortable"><span>Position_Code</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="sas_id" class="sortable"><span>SAS_ID</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="ff_name" class="sortable"><span>SPO Name</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="base_town" class="sortable"><span>Base Town</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="emp_type" class="sortable"><span>Emp. Type</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="emp_code" class="sortable"><span>Emp. Code</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="payroll_status" class="sortable"><span>Payroll Status</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="doj" class="sortable"><span>D.O.J</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="reps" class="sortable num-col"><span>Reps</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="vacant" class="sortable num-col"><span># Of Vacant</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="day_att_used" class="sortable num-col"><span>Active SPOs Today Attn</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="mtd_att_used" class="sortable num-col"><span>Active SPOs MTD Attn</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="day_call_used" class="sortable num-col"><span>Active SPOs Today Calls</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="mtd_calls_used" class="sortable num-col"><span>Active SPOs MTD Calls</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                    <th data-sort="ikon_used" class="sortable num-col"><span>IKON Used</span><i class="sort-icon" aria-hidden="true">↕</i></th>
+                  </tr>
+                </thead>
+                <tbody id="pharma-summary-tbody">
+                  <tr><td colspan="85" class="fmcg-state-cell">Loading PHARMA employee records…</td></tr>
+                </tbody>
+                <tfoot id="pharma-summary-tfoot">
+                  <tr id="pharma-tfoot-row">
+                    <td colspan="6" class="tfoot-label">Total Summary</td>
+                    <td id="pharma-total-rows-label">0 Record(s)</td>
+                    <td colspan="5"></td>
+                    <td id="pharma-total-reps" class="num-col">0</td>
+                    <td id="pharma-total-vacant" class="num-col">0</td>
+                    <td class="num-col">-</td>
+                    <td class="num-col">-</td>
+                    <td class="num-col">-</td>
+                    <td class="num-col">-</td>
+                    <td class="num-col">-</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="management-print-card fmcg-report-sheet" id="pharma-management-print-card">
+          <div class="fmcg-sheet-banner management-print-banner">
+            <div class="fmcg-banner-titles">
+              <strong id="pharma-management-banner-title">PHARMA Team – IKON MTD Call Performance Summary · MANAGEMENT PRINT Till Latest Available</strong>
+              <span id="pharma-management-banner-sub" class="fmcg-banner-sub hidden"></span>
+            </div>
+            <div class="fmcg-banner-actions">
+              <span id="pharma-management-row-badge" class="fmcg-row-badge">0 Rows</span>
+              <button type="button" id="pharma-management-fullscreen-btn" class="table-fullscreen-btn" title="Expand Management Print to Full Screen (⛶)" aria-label="Expand Management Print to Full Screen">
+                <span class="fs-icon-open" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  </svg>
+                </span>
+                <span class="fs-icon-exit hidden" aria-hidden="true"><span class="fs-exit-text">Exit</span></span>
+              </button>
+            </div>
+          </div>
+          <div class="management-print-table-wrap">
+            <table id="pharma-management-print-table" class="management-print-table">
+              <thead>
+                <tr class="management-print-group-row">
+                  <th colspan="7" class="management-group-base" id="pharma-management-print-title">PHARMA Team - IKON MTD Call Performance Summary Till Latest Available</th>
+                  <th colspan="4" class="management-group-attendance">Attendance</th>
+                  <th colspan="6" class="management-group-calls">Calls + Exception Other Calls</th>
+                  <th rowspan="2" class="management-group-comments">Comments</th>
+                </tr>
+                <tr class="management-print-column-row">
+                  <th>Legend</th>
+                  <th>Zone</th>
+                  <th>Region</th>
+                  <th>F.F Name</th>
+                  <th>Reps</th>
+                  <th># Of Vacant</th>
+                  <th>Not Used IKON Today</th>
+                  <th># of Attn Yesterday</th>
+                  <th>Active SPOs Today</th>
+                  <th># of Attn MTD</th>
+                  <th>Active SPOs MTD</th>
+                  <th># of Calls Yesterday</th>
+                  <th># of Calls Today</th>
+                  <th>Active SPOs Today</th>
+                  <th># of Calls MTD</th>
+                  <th>Active SPOs MTD</th>
+                  <th>Average P/Rep/Day</th>
+                </tr>
+              </thead>
+              <tbody id="pharma-management-print-tbody">
+                <tr><td colspan="18" class="fmcg-state-cell">Loading management summary...</td></tr>
+              </tbody>
+              <tfoot id="pharma-management-print-tfoot"></tfoot>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="editor-page" class="page-panel hidden">
+        <div class="page-heading fmcg-page-heading staff-db-heading">
+          <div>
+            <p class="eyebrow">STAFF MANAGEMENT · PUBLIC.FF_MASTER_STAFF</p>
+            <h1>FF Master Staff – Database Management</h1>
+            <p>Directly view, search, filter, add, edit, and delete employee master records in PostgreSQL (<code>ff-management-db</code>).</p>
+          </div>
+          <div class="fmcg-header-actions">
+            <button type="button" id="staff-refresh-btn" class="button secondary">
+              <span aria-hidden="true">↻</span> Refresh
+            </button>
+            <button type="button" id="staff-add-btn" class="button primary">
+              <span aria-hidden="true">+</span> Add Employee
+            </button>
+          </div>
+        </div>
+
+        <div id="staff-notice" class="notice hidden" role="status"></div>
+
+        <section class="card fmcg-summary-card staff-crud-card">
+          <div class="fmcg-toolbar staff-crud-toolbar">
+            <label class="fmcg-search-field">
+              <span>Search Employee / Position / SAS / E-Code</span>
+              <input
+                type="search"
+                id="staff-search-input"
+                placeholder="Search by Position Code, Employee Name, SAS ID, E-Code, Town…"
+                autocomplete="off"
+              />
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Team</span>
+              <select id="staff-team-filter">
+                <option value="">All Teams</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Designation</span>
+              <select id="staff-desg-filter">
+                <option value="">All Designations</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Zone</span>
+              <select id="staff-zone-filter">
+                <option value="">All Zones</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Region</span>
+              <select id="staff-region-filter">
+                <option value="">All Regions</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Base Town</span>
+              <select id="staff-town-filter">
+                <option value="">All Base Towns</option>
+              </select>
+            </label>
+            <label class="fmcg-filter-field">
+              <span>Rows / Page</span>
+              <select id="staff-page-size">
+                <option value="25" selected>25 / page</option>
+                <option value="50">50 / page</option>
+                <option value="100">100 / page</option>
+              </select>
+            </label>
+            <div class="fmcg-filter-actions">
+              <button type="button" id="staff-reset-filters" class="button secondary">Reset</button>
+            </div>
+          </div>
+
+          <div id="staff-status-bar" class="fmcg-status-bar" role="status">
+            <span id="staff-status-text">Loading employee records from public.ff_master_staff…</span>
+            <span id="staff-schema-badge" class="fmcg-metrics-note">34 Columns · Key: position_code</span>
+          </div>
+
+          <div class="fmcg-report-sheet staff-sheet-frame">
+            <div class="fmcg-sheet-banner">
+              <strong id="staff-banner-title">public.ff_master_staff — Master Employee Records</strong>
+              <span id="staff-total-badge" class="fmcg-row-badge">0 Records</span>
+            </div>
+
+            <div class="staff-table-scroll">
+              <table id="staff-crud-table" class="fmcg-excel-table staff-excel-table">
+                <thead>
+                  <tr id="staff-table-head-row">
+                    <th class="staff-actions-th">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staff-table-tbody">
+                  <tr>
+                    <td colspan="35" class="fmcg-state-cell">Loading records from PostgreSQL…</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <footer class="staff-pagination-bar" aria-label="Pagination Navigation">
+              <div class="staff-page-info" id="staff-page-info">Showing 0–0 of 0 records | Page 1 of 1</div>
+              <div class="staff-page-controls">
+                <button type="button" id="staff-first-page" class="button secondary" disabled>« First</button>
+                <button type="button" id="staff-prev-page" class="button secondary" disabled>‹ Prev</button>
+                <span id="staff-page-numbers" class="staff-page-numbers"></span>
+                <button type="button" id="staff-next-page" class="button secondary" disabled>Next ›</button>
+                <button type="button" id="staff-last-page" class="button secondary" disabled>Last »</button>
+              </div>
+            </footer>
+          </div>
+        </section>
+
+        <!-- Add / Edit Employee Modal -->
+        <div id="staff-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="staff-modal-title">
+          <div class="modal-dialog staff-modal-dialog">
+            <div class="modal-header">
+              <div>
+                <p class="eyebrow" id="staff-modal-eyebrow">DATABASE RECORD</p>
+                <h2 id="staff-modal-title">Add New Employee</h2>
+              </div>
+              <button type="button" id="staff-modal-close" class="modal-close-btn" aria-label="Close modal">✕</button>
+            </div>
+            <form id="staff-modal-form" novalidate>
+              <div id="staff-modal-error" class="notice error hidden"></div>
+              <div id="staff-modal-body" class="modal-body"></div>
+              <div class="modal-footer">
+                <button type="button" id="staff-modal-cancel" class="button secondary">Cancel</button>
+                <button type="submit" id="staff-modal-save" class="button primary">Save Record</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Delete Confirmation Modal -->
+        <div id="staff-delete-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="staff-delete-title">
+          <div class="modal-dialog staff-delete-dialog">
+            <div class="modal-header modal-header-danger">
+              <div>
+                <p class="eyebrow">PERMANENT DATABASE DELETION</p>
+                <h2 id="staff-delete-title">Confirm Record Deletion</h2>
+              </div>
+              <button type="button" id="staff-delete-close" class="modal-close-btn" aria-label="Close dialog">✕</button>
+            </div>
+            <div class="modal-body">
+              <p class="delete-warning-text">
+                Are you sure you want to permanently delete this employee record from <code>public.ff_master_staff</code>? This action cannot be undone.
+              </p>
+              <div id="staff-delete-error" class="notice error hidden"></div>
+              <div id="staff-delete-details" class="delete-record-summary"></div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" id="staff-delete-cancel" class="button secondary">Cancel</button>
+              <button type="button" id="staff-delete-confirm" class="button danger">Delete Permanently</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

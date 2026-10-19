@@ -1,0 +1,11 @@
+create table call_attendence(
+    team VARCHAR(100),
+    ff_id VARCHAR(20),
+    ff_name TEXT,
+    manager TEXT,
+    base_town VARCHAR(100),
+    call_date DATE,
+    call_type VARCHAR(30),
+    total_sum_of_done INTEGER,
+    total_distinct_count_of_ff_id INTEGER
+)
